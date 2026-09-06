@@ -50,9 +50,26 @@ describe('auditCrossPage', () => {
         page('/shop/c', { title: 'Shop' }),
       ]),
     );
-    const dupe = findings.find((f) => f.code === 'duplicate.title');
-    expect(dupe?.message).toContain('3 pages');
-    expect(dupe?.after).toEqual(['/shop/a', '/shop/b', '/shop/c']);
+    const dupes = findings.filter((f) => f.code === 'duplicate.title');
+    // One per affected route, so the rollup can name the pages involved.
+    expect(dupes.map((f) => f.route)).toEqual(['/shop/a', '/shop/b', '/shop/c']);
+    expect(dupes[0].message).toContain('3 pages');
+    expect(dupes[0].after).toEqual(['/shop/a', '/shop/b', '/shop/c']);
+    // The message is constant within the group, so aggregation collapses them.
+    expect(new Set(dupes.map((f) => f.message)).size).toBe(1);
+  });
+
+  it('names the pages involved in a duplicate, which is the actionable part', () => {
+    const findings = auditCrossPage(
+      snapshot([
+        page('/a', { description: 'Same words.' }),
+        page('/b', { description: 'Same words.' }),
+        page('/c', { description: 'Different.' }),
+      ]),
+    );
+    const [group] = aggregate(findings.filter((f) => f.code === 'duplicate.description'));
+    expect(group.count).toBe(2);
+    expect(group.routes).toEqual(['/a', '/b']);
   });
 
   it('treats several pages canonicalising to one URL as an error', () => {

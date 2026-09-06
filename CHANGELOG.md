@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.6.0] - 2026-09-06
+
+### Changed
+
+- **Breaking.** `duplicate.title`, `duplicate.description` and
+  `duplicate.canonical` now emit one finding per affected route instead of a
+  single finding with `route: null`. Integrations reading `route` on these three
+  codes will see a path where they saw null; the codes themselves are unchanged.
+
+  Found by auditing a real site. The report said "2 pages share the same meta
+  description" and could not say which two, because the routes lived in `after`,
+  which the rollup drops — leaving the only actionable part of the finding
+  invisible. Per-route findings also make the counts truthful and point
+  `--format github` annotations at the pages rather than at "site".
+
 ## [0.5.0] - 2026-09-06
 
 ### Added
@@ -201,6 +216,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.6.0]: https://github.com/shyamexe/pagetrace/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/shyamexe/pagetrace/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/shyamexe/pagetrace/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/shyamexe/pagetrace/compare/v0.2.0...v0.3.0

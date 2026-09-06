@@ -186,41 +186,46 @@ export function auditCrossPage(snapshot: Snapshot): Finding[] {
     return map;
   };
 
-  for (const [title, routes] of group((p) => p.title)) {
-    if (routes.length > 1) {
-      findings.push({
-        code: 'duplicate.title',
-        severity: 'warn',
-        route: null,
-        message: `${routes.length} pages share the title "${title}".`,
-        after: routes,
-      });
+  /**
+   * One finding per affected route rather than a single site-wide one. These
+   * rules are about specific pages, and reporting them as `route: null` meant
+   * the rollup had no routes to show: an audit said "2 pages share the same
+   * meta description" and could not say which two, which is the only part you
+   * can act on. Per-route findings also make the counts truthful and point the
+   * GitHub annotations at the pages themselves.
+   *
+   * The message is constant within a group, so aggregation still collapses them
+   * into one row.
+   */
+  const duplicates = (
+    code: string,
+    severity: Finding['severity'],
+    keyed: Map<string | null, string[]>,
+    message: (value: string, count: number) => string,
+  ) => {
+    for (const [value, routes] of keyed) {
+      if (routes.length < 2) continue;
+      for (const route of routes) {
+        findings.push({
+          code,
+          severity,
+          route,
+          message: message(value as string, routes.length),
+          after: routes,
+        });
+      }
     }
-  }
+  };
 
-  for (const [, routes] of group((p) => p.description)) {
-    if (routes.length > 1) {
-      findings.push({
-        code: 'duplicate.description',
-        severity: 'warn',
-        route: null,
-        message: `${routes.length} pages share the same meta description.`,
-        after: routes,
-      });
-    }
-  }
-
-  for (const [canonical, routes] of group((p) => p.canonical)) {
-    if (routes.length > 1) {
-      findings.push({
-        code: 'duplicate.canonical',
-        severity: 'error',
-        route: null,
-        message: `${routes.length} pages canonicalise to ${canonical}.`,
-        after: routes,
-      });
-    }
-  }
+  duplicates('duplicate.title', 'warn', group((p) => p.title), (title, n) =>
+    `${n} pages share the title "${title}".`,
+  );
+  duplicates('duplicate.description', 'warn', group((p) => p.description), (_, n) =>
+    `${n} pages share the same meta description.`,
+  );
+  duplicates('duplicate.canonical', 'error', group((p) => p.canonical), (canonical, n) =>
+    `${n} pages canonicalise to ${canonical}.`,
+  );
 
   // Only checked when we know what the site's own host is: an origin crawl
   // records it, a --dir crawl needs config.siteUrl. Guessing it from the
