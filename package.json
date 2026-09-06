@@ -1,0 +1,76 @@
+{
+  "name": "pagetrace",
+  "version": "0.1.0",
+  "description": "Baseline your site's SEO and AEO surface, diff every build against it, and fail CI on regressions.",
+  "main": "./dist/index.cjs",
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "coverage": "vitest run --coverage",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+  },
+  "keywords": [
+    "seo",
+    "aeo",
+    "geo",
+    "llms-txt",
+    "structured-data",
+    "json-ld",
+    "schema-org",
+    "ci",
+    "regression",
+    "snapshot",
+    "canonical",
+    "metadata",
+    "ai-search"
+  ],
+  "author": "Shyam (https://www.shyamjith.in/)",
+  "license": "MIT",
+  "dependencies": {
+    "cac": "^7.0.0",
+    "node-html-parser": "^9.0.3",
+    "picocolors": "^1.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^26.4.1",
+    "tsup": "^8.5.1",
+    "typescript": "^5.9.3",
+    "vitest": "^5.0.0"
+  },
+  "type": "module",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "require": "./dist/index.cjs"
+    },
+    "./package.json": "./package.json"
+  },
+  "bin": {
+    "pagetrace": "./dist/cli.js",
+    "pgt": "./dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=18.17"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/shyamexe/pagetrace.git"
+  },
+  "homepage": "https://github.com/shyamexe/pagetrace#readme",
+  "bugs": {
+    "url": "https://github.com/shyamexe/pagetrace/issues"
+  }
+}

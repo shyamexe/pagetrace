@@ -1,0 +1,8 @@
+{
+  "ignoreRoutes": ["/preview/*"],
+  "minWordCount": 150,
+  "severity": {
+    "title.changed": "info",
+    "jsonld.recommended.missing": "off"
+  }
+}
