@@ -260,6 +260,13 @@ describe('audit reporters', () => {
   });
 });
 
+/**
+ * picocolors enables colour whenever CI is set in the environment, so these
+ * assertions have to measure the rendered text rather than the escape codes.
+ * Locally they passed without this and failed on every CI runner.
+ */
+const plain = (value: string) => value.replace(/\u001b\[[0-9;]*m/g, '');
+
 describe('formatAuditPretty', () => {
   const meta = {
     target: 'https://example.com',
@@ -279,8 +286,7 @@ describe('formatAuditPretty', () => {
   });
 
   it('wraps prose to the terminal instead of running off it', () => {
-    const out = formatAuditPretty([group()], meta, 60);
-    // Colour is off in tests, so line length is the real rendered width.
+    const out = plain(formatAuditPretty([group()], meta, 60));
     for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(60);
   });
 
@@ -295,19 +301,19 @@ describe('formatAuditPretty', () => {
       meta,
       80,
     );
-    expect(out).toMatch(/ERRORS\s+─+\s+1/);
-    expect(out).toMatch(/WARNINGS\s+─+\s+1/);
+    expect(plain(out)).toMatch(/ERRORS\s+─+\s+1/);
+    expect(plain(out)).toMatch(/WARNINGS\s+─+\s+1/);
     expect(out.indexOf('ERRORS')).toBeLessThan(out.indexOf('WARNINGS'));
   });
 
   it('wraps a headline too long to share a line with the page count', () => {
     const long = group({ message: 'x'.repeat(90) });
-    const out = formatAuditPretty([long], meta, 80);
+    const out = plain(formatAuditPretty([long], meta, 80));
     for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(80);
     expect(out).toContain('3 pages');
   });
 
   it('says so plainly when there is nothing wrong', () => {
-    expect(formatAuditPretty([], meta, 80)).toContain('No issues found across 12 pages');
+    expect(plain(formatAuditPretty([], meta, 80))).toContain('No issues found across 12 pages');
   });
 });
