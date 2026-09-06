@@ -33,6 +33,9 @@ While the version is below 1.0.0, breaking changes ship in a minor release.
   not retried.
 - `sameSurface(a, b)` is exported: compares two snapshots ignoring when they were
   taken.
+- The release workflow creates a GitHub Release from each tag, using that
+  version's changelog section as the notes. A tag on its own does not appear in
+  the repo UI, so the project read as unreleased despite being on npm.
 
 ## [0.3.0] - 2026-09-06
 
