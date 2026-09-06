@@ -1,6 +1,6 @@
 {
   "name": "pagetrace",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Baseline your site's SEO and AEO surface, diff every build against it, and fail CI on regressions.",
   "main": "./dist/index.cjs",
   "scripts": {
@@ -59,7 +59,7 @@
     "CHANGELOG.md"
   ],
   "engines": {
-    "node": ">=18.17"
+    "node": ">=20.19.0"
   },
   "publishConfig": {
     "access": "public",

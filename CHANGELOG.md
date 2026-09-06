@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.3.0] - 2026-09-06
+
+### Changed
+
+- **Breaking.** `engines.node` is now `>=20.19.0`, up from `>=18.17`. The old
+  value was wrong rather than generous: `cac`, a runtime dependency, declares
+  `>=20.19.0`, so the package never actually supported the range it advertised.
+  Node 18 reached end of life in April 2025.
+
+### Fixed
+
+- CI runs the test suite against Node 20.19, 22 and 24, so the `engines` floor is
+  tested rather than asserted — the mismatch above had gone unnoticed because CI
+  only ever ran one version.
+- CI fails if `npm pack` reports that npm would auto-correct `package.json`,
+  which is how the `bin` path issue in 0.2.0 reached the registry unnoticed.
+- The release workflow refuses to publish when the tag disagrees with
+  `package.json`, or when that version is already on the registry. A published
+  version is immutable, so both mistakes are expensive after the fact.
+- Workflow actions moved to `actions/checkout@v5` and `actions/setup-node@v5`,
+  clearing the Node 20 runner deprecation warning.
+
 ## [0.2.0] - 2026-09-06
 
 A correctness pass over the whole surface. No finding codes were renamed, so
@@ -117,5 +139,6 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.3.0]: https://github.com/shyamexe/pagetrace/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/shyamexe/pagetrace/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/shyamexe/pagetrace/releases/tag/v0.1.0

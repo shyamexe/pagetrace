@@ -11,13 +11,37 @@ jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
         with:
-          node-version: 20
+          node-version: 22
           cache: npm
           registry-url: https://registry.npmjs.org
+
+      # A published version is immutable, so a tag that disagrees with
+      # package.json has to stop here rather than ship the wrong number.
+      - name: Verify tag matches package.json
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          pkg="$(node -p 'require("./package.json").version')"
+          if [ "$tag" != "$pkg" ]; then
+            echo "::error::tag v$tag does not match package.json version $pkg"
+            exit 1
+          fi
+          echo "Releasing $pkg"
+
+      - name: Verify this version is not already published
+        run: |
+          pkg="$(node -p 'require("./package.json").version')"
+          name="$(node -p 'require("./package.json").name')"
+          if npm view "$name@$pkg" version >/dev/null 2>&1; then
+            echo "::error::$name@$pkg is already on the registry"
+            exit 1
+          fi
+
       - run: npm ci
+      # prepublishOnly runs typecheck, tests and build, so a broken tree
+      # cannot reach the registry.
       - run: npm publish
         env:
           NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

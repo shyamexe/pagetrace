@@ -6,11 +6,41 @@ on:
 jobs:
   test:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      # The floor is what package.json engines claims, so the claim is tested
+      # rather than asserted. cac@7 is what sets it at 20.19.
+      matrix:
+        node-version: ['20.19', '22', '24']
+    name: node ${{ matrix.node-version }}
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
-        with: { node-version: 20, cache: npm }
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: npm
       - run: npm ci
       - run: npm run typecheck
       - run: npm test
       - run: npm run build
+
+  package:
+    runs-on: ubuntu-latest
+    name: package contents
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      # A publish is irreversible, so surface what would ship while it is still
+      # cheap to change. Fails if npm would auto-correct package.json.
+      - name: Pack and check for auto-corrections
+        run: |
+          npm pack --dry-run 2>&1 | tee pack.log
+          if grep -q "npm warn publish" pack.log; then
+            echo "::error::npm would auto-correct package.json on publish"
+            exit 1
+          fi
