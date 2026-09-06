@@ -1,5 +1,10 @@
 # pagetrace
 
+[![npm](https://img.shields.io/npm/v/pagetrace.svg)](https://www.npmjs.com/package/pagetrace)
+[![CI](https://github.com/shyamexe/pagetrace/actions/workflows/ci.yml/badge.svg)](https://github.com/shyamexe/pagetrace/actions/workflows/ci.yml)
+[![node](https://img.shields.io/node/v/pagetrace.svg)](https://www.npmjs.com/package/pagetrace)
+[![license](https://img.shields.io/npm/l/pagetrace.svg)](./LICENSE)
+
 A lockfile for your SEO and AEO surface. Snapshot it, diff every build, fail CI on regressions.
 
 Existing SEO and AEO tools tell you your score **right now**. They don't tell you that this deploy dropped the canonical tag from 400 pages, that a layout refactor added `noindex`, that a CMS migration stripped `Product` schema, or that someone quietly blocked `GPTBot` in `robots.txt`. Those regressions are silent for weeks until traffic moves.
@@ -12,6 +17,7 @@ Existing SEO and AEO tools tell you your score **right now**. They don't tell yo
 npm install -D pagetrace
 ```
 
+Requires Node 20.19 or newer. No native modules, three small dependencies.
 
 ## Use
 
@@ -42,7 +48,9 @@ npx pagetrace check --dir ./out
 5 error, 9 warning, 2 info
 ```
 
-Exit code is `1` when anything at or above `--fail-on` (default `error`) is found.
+Exit code is `1` when anything at or above `--fail-on` is found. It takes `error` (the default), `warn` or `info`, and rejects anything else rather than quietly letting the build pass.
+
+Note that `check` runs the absolute rules as well as the diff, so it can fail on a problem your build did not introduce. Use `--no-audit` for a pure regression gate.
 
 Accept the new state once you've reviewed it:
 
@@ -74,7 +82,7 @@ ERROR Page has no <h1>.                                                        (
   /tag/widgets
 ```
 
-Auditing runs cross-page rules the per-page checks cannot see: duplicate titles and descriptions, several pages canonicalising to one URL, canonicals pointing away from their own path, and a full hreflang check.
+Auditing runs cross-page rules the per-page checks cannot see: duplicate titles and descriptions, several pages canonicalising to one URL, canonicals pointing away from their own path or at another host entirely, and a full hreflang check. Paginated archives and AMP variants are left alone, since canonicalising those to their parent is correct.
 
 The hreflang rules are the ones hardest to run by hand. Google discards an entire hreflang cluster when the annotations are not reciprocal — if `/en/about` points at `/ml/about` but `/ml/about` does not point back, *every* link in that group is ignored, not just the broken one, and nothing reports it. `pagetrace` checks reciprocity across the whole crawl, plus self-references, `x-default`, malformed language codes, and alternates that point at noindexed pages. Sites with no hreflang anywhere are left alone.
 
@@ -90,7 +98,9 @@ Route discovery follows `robots.txt` sitemap declarations, then falls back throu
 npx pagetrace snapshot --url https://example.com --limit 200
 ```
 
-Routes are discovered from `robots.txt` sitemap declarations, falling back to `/sitemap.xml`. Sitemap indexes are followed one level.
+Routes are discovered from `robots.txt` sitemap declarations, falling back to `/sitemap.xml`. Sitemap indexes are followed one level, up to 50 children, and expansion stops once `--limit` is satisfied. Gzipped children are recognised but not read.
+
+URLs pointing at another host are skipped. A page that cannot be fetched stops the run with an error rather than being dropped from the snapshot — a page silently missing from a crawl is indistinguishable from a page you deleted, and reporting a transient outage as a site-wide deletion is worse than failing.
 
 ## What it records
 
