@@ -26,6 +26,18 @@ export function routeFromUrl(url: string): string {
   }
 }
 
+/**
+ * Whether two snapshots describe the same surface, ignoring when they were
+ * taken. The lockfile is meant to be committed, so writing a fresh timestamp on
+ * every run put a diff in front of the reviewer even when nothing had changed.
+ * That trains people to discard lockfile changes without reading them, which is
+ * the one habit this tool cannot afford.
+ */
+export function sameSurface(a: Snapshot, b: Snapshot): boolean {
+  const strip = (s: Snapshot) => JSON.stringify({ ...s, createdAt: '' });
+  return strip(a) === strip(b);
+}
+
 export function shouldIgnore(route: string, patterns: string[] = []): boolean {
   return patterns.some((pattern) =>
     pattern.endsWith('*') ? route.startsWith(pattern.slice(0, -1)) : route === pattern,
@@ -46,27 +58,50 @@ async function walkHtml(dir: string, acc: string[] = []): Promise<string[]> {
 }
 
 const DEFAULT_TIMEOUT_MS = 15_000;
+const MAX_ATTEMPTS = 3;
+const RETRY_BASE_MS = 300;
+
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** 429 and 5xx are worth retrying; a 4xx is an answer, not a hiccup. */
+function isTransient(status: number): boolean {
+  return status === 429 || status >= 500;
+}
 
 /**
  * `null` means the resource is genuinely absent; anything else throws.
  *
  * The distinction is the whole point: swallowing a 503 or a DNS failure into
  * "not found" makes an unreachable site look like a deleted one, and `check`
- * then reports a wall of removals that never happened.
+ * then reports a wall of removals that never happened. Being strict about it
+ * is only practical with a retry, or one flaky response aborts a 200-page
+ * crawl.
  */
 async function fetchText(url: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string | null> {
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      signal: AbortSignal.timeout(timeoutMs),
-      headers: { 'user-agent': 'pagetrace (+https://npmjs.com/package/pagetrace)' },
-    });
-  } catch (cause) {
-    throw new Error(`Could not reach ${url}: ${(cause as Error).message}`, { cause });
+  let lastError: Error | undefined;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
+    if (attempt > 1) await sleep(RETRY_BASE_MS * 3 ** (attempt - 2));
+
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        signal: AbortSignal.timeout(timeoutMs),
+        headers: { 'user-agent': 'pagetrace (+https://npmjs.com/package/pagetrace)' },
+      });
+    } catch (cause) {
+      lastError = new Error(`Could not reach ${url}: ${(cause as Error).message}`, { cause });
+      continue;
+    }
+
+    if (response.status === 404 || response.status === 410) return null;
+    if (response.ok) return await response.text();
+
+    lastError = new Error(`Could not reach ${url}: HTTP ${response.status}.`);
+    if (!isTransient(response.status)) break;
   }
-  if (response.status === 404 || response.status === 410) return null;
-  if (!response.ok) throw new Error(`Could not reach ${url}: HTTP ${response.status}.`);
-  return await response.text();
+
+  throw lastError;
 }
 
 /** For speculative URLs, where a failure is a miss rather than a problem. */

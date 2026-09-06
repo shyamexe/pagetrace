@@ -6,8 +6,7 @@ export default defineConfig({
   format: ['esm', 'cjs'],
   dts: true,
   clean: true,
-  target: 'node18',
+  target: 'node20',
   splitting: false,
-  sourcemap: true,
   define: { __VERSION__: JSON.stringify(version) },
 });

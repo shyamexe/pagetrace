@@ -48,9 +48,11 @@ npx pagetrace check --dir ./out
 5 error, 9 warning, 2 info
 ```
 
-Exit code is `1` when anything at or above `--fail-on` is found. It takes `error` (the default), `warn` or `info`, and rejects anything else rather than quietly letting the build pass.
+Exit codes are `0` for clean, `1` for findings at or above `--fail-on`, and `2` when the run itself failed — bad flags, an unreadable build directory, an unreachable origin. CI can tell "the site regressed" from "the tool broke". `--fail-on` takes `error` (the default), `warn` or `info`, and rejects anything else rather than quietly letting the build pass.
 
 Note that `check` runs the absolute rules as well as the diff, so it can fail on a problem your build did not introduce. Use `--no-audit` for a pure regression gate.
+
+The lockfile is only rewritten when the surface actually changed, so an unchanged site leaves it byte-identical and produces no git diff.
 
 Accept the new state once you've reviewed it:
 

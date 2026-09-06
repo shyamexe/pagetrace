@@ -18,7 +18,7 @@ import {
   shouldFail,
   summarize,
 } from './report.js';
-import { snapshotFromDir, snapshotFromOrigin } from './snapshot.js';
+import { sameSurface, snapshotFromDir, snapshotFromOrigin } from './snapshot.js';
 import type { Config, Severity, Snapshot } from './types.js';
 
 /** Injected from package.json at build time; see tsup.config.ts. */
@@ -26,6 +26,20 @@ declare const __VERSION__: string;
 
 const DEFAULT_LOCKFILE = 'pagetrace.lock.json';
 const DEFAULT_CONFIG = 'pagetrace.config.json';
+
+/** Findings at or above --fail-on. The site has a problem. */
+const EXIT_FINDINGS = 1;
+/** The run itself failed: bad flags, unreachable origin, unreadable build. */
+const EXIT_FAILURE = 2;
+
+async function writeLockfile(path: string, next: Snapshot): Promise<boolean> {
+  const previous = await readFile(path, 'utf8')
+    .then((text) => JSON.parse(text) as Snapshot)
+    .catch(() => null);
+  if (previous && sameSurface(previous, next)) return false;
+  await writeFile(path, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
+  return true;
+}
 
 interface SourceFlags {
   dir?: string;
@@ -93,9 +107,13 @@ cli
   .action(async (flags) => {
     const config = await loadConfig(flags.config);
     const snapshot = await build(flags, config);
-    await writeFile(flags.out, `${JSON.stringify(snapshot, null, 2)}\n`, 'utf8');
+    const written = await writeLockfile(flags.out, snapshot);
     const count = Object.keys(snapshot.pages).length;
-    console.log(pc.green(`Wrote ${flags.out} — ${count} page${count === 1 ? '' : 's'}.`));
+    console.log(
+      written
+        ? pc.green(`Wrote ${flags.out} — ${count} page${count === 1 ? '' : 's'}.`)
+        : pc.dim(`${flags.out} is already up to date — ${count} page${count === 1 ? '' : 's'}.`),
+    );
   });
 
 cli
@@ -137,8 +155,10 @@ cli
     console.log(render(findings, flags.format));
 
     if (flags.update) {
-      await writeFile(flags.lockfile, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-      console.error(pc.dim(`Updated ${flags.lockfile}.`));
+      const written = await writeLockfile(flags.lockfile, next);
+      console.error(
+        pc.dim(written ? `Updated ${flags.lockfile}.` : `${flags.lockfile} is already up to date.`),
+      );
     }
 
     const summary = summarize(findings);
@@ -146,7 +166,7 @@ cli
       console.error(
         pc.red(`\nFailing: ${summary.error} error, ${summary.warn} warning (--fail-on ${failOn}).`),
       );
-      process.exitCode = 1;
+      process.exitCode = EXIT_FINDINGS;
     }
   });
 
@@ -172,7 +192,7 @@ cli
           'No pages found. Check that the sitemap is reachable, or pass --dir with pre-rendered HTML.',
         ),
       );
-      process.exitCode = 1;
+      process.exitCode = EXIT_FAILURE;
       return;
     }
 
@@ -209,7 +229,7 @@ cli
     }
 
     if (failOn !== 'never' && shouldFail(findings, failOn)) {
-      process.exitCode = 1;
+      process.exitCode = EXIT_FINDINGS;
     }
   });
 
@@ -222,7 +242,7 @@ async function main() {
     await cli.runMatchedCommand();
   } catch (error) {
     console.error(pc.red((error as Error).message));
-    process.exitCode = 1;
+    process.exitCode = EXIT_FAILURE;
   }
 }
 

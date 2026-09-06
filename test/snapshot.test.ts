@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { snapshotFromOrigin } from '../src/snapshot.js';
+import { sameSurface, snapshotFromOrigin } from '../src/snapshot.js';
 
 const ORIGIN = 'https://example.com';
 
@@ -25,6 +25,69 @@ function stubNetwork(routes: Record<string, string | Error | null>) {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe('sameSurface', () => {
+  const base = {
+    schemaVersion: 1 as const,
+    createdAt: '2026-01-01T00:00:00.000Z',
+    site: { origin: ORIGIN, robotsTxt: null, llmsTxt: null },
+    pages: {},
+  };
+
+  it('ignores the timestamp, so an unchanged site does not churn the lockfile', () => {
+    expect(sameSurface(base, { ...base, createdAt: '2026-06-06T12:00:00.000Z' })).toBe(true);
+  });
+
+  it('still notices a real change', () => {
+    const changed = { ...base, site: { ...base.site, llmsTxt: { present: true, sections: [], bytes: 10 } } };
+    expect(sameSurface(base, changed)).toBe(false);
+  });
+});
+
+describe('fetchText retries', () => {
+  it('recovers from a transient 503 instead of failing the crawl', async () => {
+    let hits = 0;
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url === `${ORIGIN}/sitemap.xml`)
+        return new Response(`<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`, { status: 200 });
+      if (url === `${ORIGIN}/a`) {
+        hits += 1;
+        if (hits < 3) return new Response('later', { status: 503 });
+        return new Response(html('A'), { status: 200 });
+      }
+      return new Response('nope', { status: 404 });
+    });
+
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(hits).toBe(3);
+    expect(snapshot.pages['/a'].title).toBe('A');
+  });
+
+  it('gives up after repeated failures rather than pretending the page is gone', async () => {
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url === `${ORIGIN}/sitemap.xml`)
+        return new Response(`<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`, { status: 200 });
+      if (url === `${ORIGIN}/a`) return new Response('down', { status: 503 });
+      return new Response('nope', { status: 404 });
+    });
+    await expect(snapshotFromOrigin(ORIGIN)).rejects.toThrow(/HTTP 503/);
+  });
+
+  it('does not retry a 4xx, which is an answer rather than a hiccup', async () => {
+    let hits = 0;
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url === `${ORIGIN}/sitemap.xml`)
+        return new Response(`<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`, { status: 200 });
+      if (url === `${ORIGIN}/a`) {
+        hits += 1;
+        return new Response('nope', { status: 403 });
+      }
+      return new Response('nope', { status: 404 });
+    });
+    await expect(snapshotFromOrigin(ORIGIN)).rejects.toThrow(/HTTP 403/);
+    expect(hits).toBe(1);
+  });
+});
 
 describe('snapshotFromOrigin', () => {
   it('treats a 404 as absent rather than as a failure', async () => {

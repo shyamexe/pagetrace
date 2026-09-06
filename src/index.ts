@@ -26,6 +26,7 @@ export { RICH_RESULT_RULES, DEFAULT_AI_AGENTS } from './rules/rich-results.js';
 export {
   routeFromFilePath,
   routeFromUrl,
+  sameSurface,
   shouldIgnore,
   snapshotFromDir,
   snapshotFromOrigin,

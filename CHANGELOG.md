@@ -6,6 +6,34 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.4.0] - 2026-09-06
+
+### Changed
+
+- **Breaking.** A failed run now exits `2` rather than `1`. `1` means findings at
+  or above `--fail-on`; `2` means the run itself failed — invalid flags, an
+  unreadable build directory, an unreachable origin, no pages found. CI could not
+  previously distinguish "the site regressed" from "the tool broke", which are
+  opposite situations: one should fail the build, the other should page someone.
+- The lockfile is only rewritten when the surface actually changed. It carries a
+  `createdAt` timestamp, so every run used to produce a git diff even on an
+  unchanged site — which teaches reviewers to discard lockfile changes without
+  reading them, the one habit this tool cannot afford. `snapshot` and
+  `check --update` now say "already up to date" and leave the file alone.
+- Source maps are no longer published. They were 61% of the package: 715 kB
+  unpacked down to 281 kB. Nobody steps through a built CLI.
+- Build target moved from `node18` to `node20`, matching the engines floor.
+
+### Added
+
+- Failed requests are retried up to three times with backoff, on network errors,
+  429 and 5xx. 0.2.0 made an unreachable page abort the crawl rather than be
+  silently dropped, which is correct but brittle without a retry — one flaky
+  response could end a 200-page crawl. A 4xx is an answer, not a hiccup, and is
+  not retried.
+- `sameSurface(a, b)` is exported: compares two snapshots ignoring when they were
+  taken.
+
 ## [0.3.0] - 2026-09-06
 
 ### Changed
@@ -139,6 +167,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.4.0]: https://github.com/shyamexe/pagetrace/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/shyamexe/pagetrace/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/shyamexe/pagetrace/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/shyamexe/pagetrace/releases/tag/v0.1.0
