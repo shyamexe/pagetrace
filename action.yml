@@ -107,8 +107,15 @@ runs:
 
     # Edits the previous comment rather than adding one per push, so a long PR
     # does not accumulate a wall of stale reports.
+    #
+    # Skipped for pull requests from a fork: those run with a read-only token, so
+    # posting would fail with a 403 through no fault of the contributor. The
+    # findings are still in the step summary and still set the exit code.
     - name: Comment on the pull request
-      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      if: >-
+        inputs.comment == 'true'
+        && github.event_name == 'pull_request'
+        && github.event.pull_request.head.repo.full_name == github.repository
       shell: bash
       env:
         GH_TOKEN: ${{ inputs.github-token }}

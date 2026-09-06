@@ -1,0 +1,154 @@
+{
+  "schemaVersion": 1,
+  "createdAt": "2026-09-06T15:04:56.192Z",
+  "site": {
+    "origin": "https://northwind.example.com",
+    "robotsTxt": {
+      "present": true,
+      "aiAgents": {
+        "GPTBot": "allowed",
+        "OAI-SearchBot": "allowed",
+        "ChatGPT-User": "allowed",
+        "ClaudeBot": "allowed",
+        "Claude-User": "allowed",
+        "PerplexityBot": "allowed",
+        "Perplexity-User": "allowed",
+        "Google-Extended": "allowed",
+        "Applebot-Extended": "allowed",
+        "CCBot": "allowed",
+        "Bytespider": "allowed",
+        "meta-externalagent": "allowed"
+      },
+      "sitemaps": [
+        "https://northwind.example.com/sitemap.xml"
+      ]
+    },
+    "llmsTxt": {
+      "present": true,
+      "sections": [
+        "Pages"
+      ],
+      "bytes": 424
+    }
+  },
+  "pages": {
+    "/about": {
+      "route": "/about",
+      "title": "About Northwind Bakery — our starter, our flour, our people",
+      "description": "How a decade-old sourdough starter and Kerala-milled flour became a bakery on Burgher Street.",
+      "canonical": "https://northwind.example.com/about",
+      "robots": null,
+      "og": {
+        "og:title": "About Northwind Bakery",
+        "og:image": "https://northwind.example.com/og.png"
+      },
+      "twitter": {},
+      "hreflang": {},
+      "h1": [
+        "About the bakery"
+      ],
+      "headingOutline": [
+        "h1",
+        "h2",
+        "h2",
+        "h2"
+      ],
+      "jsonLd": [
+        {
+          "type": "AboutPage",
+          "properties": [
+            "name"
+          ]
+        }
+      ],
+      "wordCount": 158,
+      "images": {
+        "total": 1,
+        "missingAlt": 0
+      },
+      "leadAnswerWords": 30,
+      "generator": null
+    },
+    "/guides/sourdough-starter": {
+      "route": "/guides/sourdough-starter",
+      "title": "How to keep a sourdough starter alive — Northwind Bakery",
+      "description": "Feeding ratios, temperature and the signs of a healthy starter, from a bakery that has kept one going since 2011.",
+      "canonical": "https://northwind.example.com/guides/sourdough-starter",
+      "robots": null,
+      "og": {
+        "og:title": "How to keep a sourdough starter alive",
+        "og:image": "https://northwind.example.com/og.png"
+      },
+      "twitter": {},
+      "hreflang": {},
+      "h1": [
+        "How to keep a sourdough starter alive"
+      ],
+      "headingOutline": [
+        "h1",
+        "h2",
+        "h2",
+        "h2"
+      ],
+      "jsonLd": [
+        {
+          "type": "Article",
+          "properties": [
+            "author",
+            "dateModified",
+            "datePublished",
+            "headline",
+            "image"
+          ]
+        }
+      ],
+      "wordCount": 179,
+      "images": {
+        "total": 1,
+        "missingAlt": 0
+      },
+      "leadAnswerWords": 30,
+      "generator": null
+    },
+    "/": {
+      "route": "/",
+      "title": "Northwind Bakery — Sourdough baked daily in Kochi",
+      "description": "A neighbourhood bakery in Kochi. Sourdough, croissants and cardamom buns, baked fresh every morning.",
+      "canonical": "https://northwind.example.com/",
+      "robots": null,
+      "og": {
+        "og:title": "Northwind Bakery",
+        "og:image": "https://northwind.example.com/og.png"
+      },
+      "twitter": {},
+      "hreflang": {},
+      "h1": [
+        "Sourdough baked daily in Kochi"
+      ],
+      "headingOutline": [
+        "h1",
+        "h2",
+        "h2",
+        "h2"
+      ],
+      "jsonLd": [
+        {
+          "type": "Bakery",
+          "properties": [
+            "address",
+            "image",
+            "name",
+            "telephone"
+          ]
+        }
+      ],
+      "wordCount": 165,
+      "images": {
+        "total": 1,
+        "missingAlt": 0
+      },
+      "leadAnswerWords": 27,
+      "generator": null
+    }
+  }
+}

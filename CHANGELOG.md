@@ -20,8 +20,15 @@ While the version is below 1.0.0, breaking changes ship in a minor release.
 - A composite GitHub Action (`action.yml`). Three lines in a workflow run the
   check and post the findings as a pull request comment, editing the previous
   comment on each push rather than stacking new ones. It fetches the baseline ref
-  first, since a shallow CI checkout usually has only the PR head.
+  first, since a shallow CI checkout usually has only the PR head. The comment is
+  skipped for pull requests from a fork, which run with a read-only token and
+  would otherwise fail with a 403 through no fault of the contributor; the
+  findings still reach the step summary and still set the exit code.
 - `snapshotFromGitRef(ref, path)` is exported.
+- `examples/site`, a small deliberately correct site with a committed baseline.
+  The action runs against it on every pull request to this repo, so a change
+  that breaks the action's own wiring fails here rather than in someone else's
+  CI. It doubles as a worked example of what a clean surface looks like.
 
 ### Fixed
 

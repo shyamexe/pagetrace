@@ -1,0 +1,27 @@
+name: pagetrace
+
+# Dogfooding. examples/site is a small, deliberately correct site; this runs the
+# action in this repo against it on every pull request, so a change that breaks
+# the action's own wiring fails here rather than in someone else's CI.
+on:
+  pull_request:
+  push: { branches: [main] }
+
+permissions:
+  contents: read
+  pull-requests: write   # required to post the findings as a comment
+
+jobs:
+  seo:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      # `./` rather than `shyamexe/pagetrace@v1`, so a pull request tests the
+      # action as that pull request changes it, not the last released copy.
+      - uses: ./
+        with:
+          dir: examples/site
+          config: examples/pagetrace.config.json
+          lockfile: examples/pagetrace.lock.json
+          baseline-branch: ${{ github.event_name == 'pull_request' && 'main' || '' }}

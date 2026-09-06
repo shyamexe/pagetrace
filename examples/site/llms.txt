@@ -1,0 +1,9 @@
+# Northwind Bakery
+
+> A neighbourhood bakery in Fort Kochi, baking naturally leavened sourdough since 2011.
+
+## Pages
+
+- [Home](https://northwind.example.com/): what we bake and when it comes out of the oven
+- [About](https://northwind.example.com/about): the starter, the flour and the people
+- [Keeping a sourdough starter alive](https://northwind.example.com/guides/sourdough-starter): feeding ratios and troubleshooting
