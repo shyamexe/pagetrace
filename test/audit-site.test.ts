@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { auditCrossPage } from '../src/audit.js';
 import { detectPlatform, withGuidance, GUIDANCE } from '../src/rules/guidance.js';
-import { aggregate, formatAuditHtml, formatAuditMarkdown } from '../src/report.js';
+import { aggregate, formatAuditHtml, formatAuditMarkdown, formatAuditPretty } from '../src/report.js';
 import type { Aggregate, Finding, PageFingerprint, Snapshot } from '../src/types.js';
 
 function page(route: string, overrides: Partial<PageFingerprint> = {}): PageFingerprint {
@@ -257,5 +257,57 @@ describe('audit reporters', () => {
     const html = formatAuditHtml(hostile, meta);
     expect(html).not.toContain('<img src=x');
     expect(html).toContain('&lt;img src=x');
+  });
+});
+
+describe('formatAuditPretty', () => {
+  const meta = {
+    target: 'https://example.com',
+    platform: 'unknown' as const,
+    pageCount: 12,
+    generatedAt: '2026-09-06',
+  };
+  const group = (over: Partial<Aggregate> = {}): Aggregate => ({
+    code: 'h1.missing',
+    severity: 'error',
+    count: 3,
+    routes: ['/about', '/experiment', '/projects'],
+    message: 'Page has no <h1>.',
+    detail: 'The h1 tells both crawlers and answer engines what the page is about, and it anchors the document outline used for passage extraction.',
+    fix: 'Add exactly one h1 that matches the page topic.',
+    ...over,
+  });
+
+  it('wraps prose to the terminal instead of running off it', () => {
+    const out = formatAuditPretty([group()], meta, 60);
+    // Colour is off in tests, so line length is the real rendered width.
+    for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(60);
+  });
+
+  it('keeps the affected routes on their own line', () => {
+    const out = formatAuditPretty([group()], meta, 80);
+    expect(out).toContain('/about, /experiment, /projects');
+  });
+
+  it('groups findings under a rule per severity', () => {
+    const out = formatAuditPretty(
+      [group(), group({ severity: 'warn', code: 'og.image.missing', message: 'Missing og:image.' })],
+      meta,
+      80,
+    );
+    expect(out).toMatch(/ERRORS\s+─+\s+1/);
+    expect(out).toMatch(/WARNINGS\s+─+\s+1/);
+    expect(out.indexOf('ERRORS')).toBeLessThan(out.indexOf('WARNINGS'));
+  });
+
+  it('wraps a headline too long to share a line with the page count', () => {
+    const long = group({ message: 'x'.repeat(90) });
+    const out = formatAuditPretty([long], meta, 80);
+    for (const line of out.split('\n')) expect(line.length).toBeLessThanOrEqual(80);
+    expect(out).toContain('3 pages');
+  });
+
+  it('says so plainly when there is nothing wrong', () => {
+    expect(formatAuditPretty([], meta, 80)).toContain('No issues found across 12 pages');
   });
 });

@@ -228,7 +228,7 @@ cli
           ? formatAuditMarkdown(groups, meta)
           : flags.format === 'html'
             ? formatAuditHtml(groups, meta)
-            : formatAuditPretty(groups, meta);
+            : formatAuditPretty(groups, meta, process.stdout.columns);
 
     if (flags.out) {
       await writeFile(flags.out, `${output}\n`, 'utf8');

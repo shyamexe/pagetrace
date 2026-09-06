@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.7.0] - 2026-09-06
+
+### Changed
+
+- The terminal audit report is laid out rather than printed. Findings sit under a
+  rule per severity, prose wraps to the terminal instead of running off the right
+  edge, the affected routes get their own line, and the page count is right
+  aligned against the headline. The old output put explanation, fix and routes at
+  the same indent with no wrapping, so on a real site the useful part was the
+  hardest part to find.
+- `formatAuditPretty(groups, meta, columns?)` takes an optional terminal width,
+  defaulting to 80. The CLI passes `process.stdout.columns`, which keeps
+  `report.ts` free of environment reads. Piped output falls back to 80 and drops
+  colour, so it stays readable in a CI log.
+
+### Fixed
+
+- A word longer than the terminal is hard-broken instead of overflowing. A
+  canonical URL is a single word and is routinely longer than 80 characters, so
+  `duplicate.canonical` could push a line well past the edge.
+
 ## [0.6.0] - 2026-09-06
 
 ### Changed
@@ -216,6 +237,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.7.0]: https://github.com/shyamexe/pagetrace/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/shyamexe/pagetrace/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/shyamexe/pagetrace/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/shyamexe/pagetrace/compare/v0.3.0...v0.4.0

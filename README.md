@@ -72,16 +72,27 @@ npx pagetrace audit --url https://example.com --format html --out audit.html
 Findings are rolled up by issue rather than by page, so one template defect reads as a single row affecting 43 pages instead of 43 separate lines. Each row carries why it matters and how to fix it, and the fix is platform-aware — `pagetrace` reads the generator tag and asset paths, so a WordPress site gets Yoast and Rank Math instructions rather than generic advice.
 
 ```
-ERROR 2 pages canonicalise to https://acme.test/shop.                          (1)
+pagetrace · https://acme.test
+43 pages · WordPress · 2026-09-06
+
+ERRORS ─────────────────────────────────────────────────────────────────────── 2
+
+✗ 2 pages canonicalise to https://acme.test/shop.                        2 pages
   Several pages pointing at one canonical means those pages are declaring
   themselves duplicates and will not rank independently.
-  Fix: A common symptom of a plugin canonicalising every archive page to the parent.
+  → A common symptom of a plugin canonicalising every archive page to the
+    parent.
+  /shop/page/2, /shop/page/3
 
-ERROR Page has no <h1>.                                                        (1)
+✗ Page has no <h1>.                                                       1 page
   The h1 anchors the document outline used for passage extraction.
-  Fix: Many themes render the post title as h2 inside archive templates.
-       Check single.php or the block template for this post type.
+  → Many themes render the post title as h2 inside archive templates. Check
+    single.php or the block template for this post type.
   /tag/widgets
+
+────────────────────────────────────────────────────────────────────────────────
+2 issues  2 errors
+3 findings across 43 pages
 ```
 
 Auditing runs cross-page rules the per-page checks cannot see: duplicate titles and descriptions, several pages canonicalising to one URL, canonicals pointing away from their own path or at another host entirely, and a full hreflang check. Paginated archives and AMP variants are left alone, since canonicalising those to their parent is correct.

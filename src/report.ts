@@ -186,38 +186,137 @@ function sampleRoutes(routes: string[], limit = 5): string {
   return routes.length > limit ? `${shown} +${routes.length - limit} more` : shown;
 }
 
-export function formatAuditPretty(groups: Aggregate[], meta: AuditMeta): string {
+const GLYPH: Record<Severity, string> = { error: '\u2717', warn: '\u25B2', info: '\u00B7' };
+const PLURAL: Record<Severity, string> = { error: 'errors', warn: 'warnings', info: 'notes' };
+const SINGULAR: Record<Severity, string> = { error: 'error', warn: 'warning', info: 'note' };
+
+/**
+ * Wrap on words. Called before colouring, since escape codes would otherwise
+ * count towards the line length and wrap the text short.
+ */
+function wrapText(text: string, width: number): string[] {
+  const lines: string[] = [];
+  let line = '';
+
+  const flush = () => {
+    if (line) lines.push(line);
+    line = '';
+  };
+
+  for (const word of text.split(/\s+/)) {
+    // A canonical URL is one word and is routinely longer than the terminal, so
+    // word wrapping alone would still overflow. Hard-break those.
+    if (word.length > width) {
+      flush();
+      for (let i = 0; i < word.length; i += width) lines.push(word.slice(i, i + width));
+      continue;
+    }
+    if (line && line.length + 1 + word.length > width) {
+      flush();
+      line = word;
+    } else {
+      line = line ? `${line} ${word}` : word;
+    }
+  }
+  flush();
+  return lines;
+}
+
+/** `ERRORS ────────────── 1` */
+function sectionRule(severity: Severity, count: number, width: number): string {
+  const label = PLURAL[severity].toUpperCase();
+  const tail = String(count);
+  const dashes = Math.max(3, width - label.length - tail.length - 2);
+  return `${BADGE[severity](pc.bold(label))} ${pc.dim('\u2500'.repeat(dashes))} ${pc.dim(tail)}`;
+}
+
+/**
+ * The terminal report. Findings are grouped under a rule per severity, prose is
+ * wrapped to the terminal rather than running off it, and the affected routes
+ * sit on their own line — they are the part you act on, and they used to blend
+ * into the surrounding text.
+ */
+export function formatAuditPretty(groups: Aggregate[], meta: AuditMeta, columns = 80): string {
+  const width = Math.min(Math.max(columns, 48), 96);
+  const indent = '  ';
+  const body = width - indent.length;
+
   const lines: string[] = [
-    pc.bold(meta.target),
-    pc.dim(`${PLATFORM_LABEL[meta.platform]} · ${meta.pageCount} pages · ${meta.generatedAt}`),
+    `${pc.bold('pagetrace')} ${pc.dim('\u00B7')} ${meta.target}`,
+    pc.dim(
+      [
+        `${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'}`,
+        meta.platform === 'unknown' ? null : PLATFORM_LABEL[meta.platform],
+        meta.generatedAt,
+      ]
+        .filter(Boolean)
+        .join(' \u00B7 '),
+    ),
     '',
   ];
 
   if (groups.length === 0) {
-    lines.push(pc.green('No issues found.'));
+    lines.push(pc.green(`\u2713 No issues found across ${meta.pageCount} pages.`), '');
     return lines.join('\n');
   }
 
-  for (const group of groups) {
-    const scope = isTemplateWide(group, meta.pageCount)
-      ? pc.dim(`(${group.count} pages — one template fix)`)
-      : pc.dim(`(${group.count})`);
-    lines.push(`${BADGE[group.severity](group.severity.toUpperCase())} ${pc.bold(group.message)} ${scope}`);
-    if (group.detail) lines.push(`  ${group.detail}`);
-    if (group.fix) lines.push(`  ${pc.cyan('Fix:')} ${group.fix}`);
-    if (group.routes.length > 0) lines.push(`  ${pc.dim(sampleRoutes(group.routes))}`);
-    lines.push('');
+  for (const severity of ['error', 'warn', 'info'] as Severity[]) {
+    const inSeverity = groups.filter((g) => g.severity === severity);
+    if (inSeverity.length === 0) continue;
+
+    lines.push(sectionRule(severity, inSeverity.length, width), '');
+
+    for (const group of inSeverity) {
+      const scope = isTemplateWide(group, meta.pageCount)
+        ? `${group.count} pages \u00B7 one template fix`
+        : `${group.count} page${group.count === 1 ? '' : 's'}`;
+
+      // Headline left, scope right, on one line when they fit.
+      const headline = group.message;
+      const room = width - 2 - scope.length - 1;
+      if (headline.length <= room) {
+        const pad = ' '.repeat(Math.max(1, room - headline.length + 1));
+        lines.push(
+          `${BADGE[severity](GLYPH[severity])} ${pc.bold(headline)}${pad}${pc.dim(scope)}`,
+        );
+      } else {
+        for (const [i, line] of wrapText(headline, width - 2).entries()) {
+          lines.push(i === 0 ? `${BADGE[severity](GLYPH[severity])} ${pc.bold(line)}` : `${indent}${pc.bold(line)}`);
+        }
+        lines.push(`${indent}${pc.dim(scope)}`);
+      }
+
+      if (group.detail) {
+        for (const line of wrapText(group.detail, body)) lines.push(`${indent}${pc.dim(line)}`);
+      }
+      if (group.fix) {
+        const [first, ...rest] = wrapText(group.fix, body - 2);
+        lines.push(`${indent}${pc.cyan('\u2192')} ${first}`);
+        for (const line of rest) lines.push(`${indent}  ${line}`);
+      }
+      if (group.routes.length > 0) {
+        for (const line of wrapText(sampleRoutes(group.routes), body)) {
+          lines.push(`${indent}${pc.dim(line)}`);
+        }
+      }
+      lines.push('');
+    }
   }
 
   const { issues, instances, total } = countIssues(groups);
-  lines.push(
-    `${total} issue${total === 1 ? '' : 's'}: ${issues.error} error, ${issues.warn} warning, ${issues.info} info`,
-  );
+  const counted = (['error', 'warn', 'info'] as Severity[])
+    .filter((s) => issues[s] > 0)
+    .map((s) => BADGE[s](`${issues[s]} ${issues[s] === 1 ? SINGULAR[s] : PLURAL[s]}`))
+    .join(pc.dim(' \u00B7 '));
+
+  lines.push(pc.dim('\u2500'.repeat(width)));
+  lines.push(`${pc.bold(`${total} issue${total === 1 ? '' : 's'}`)}  ${counted}`);
   lines.push(
     pc.dim(
-      `across ${instances.error + instances.warn + instances.info} page findings on ${meta.pageCount} pages`,
+      `${instances.error + instances.warn + instances.info} findings across ${meta.pageCount} pages`,
     ),
   );
+  lines.push('');
   return lines.join('\n');
 }
 
