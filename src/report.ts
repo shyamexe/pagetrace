@@ -69,8 +69,14 @@ export function formatJson(findings: Finding[]): string {
   return JSON.stringify({ schemaVersion: 1, summary: summarize(findings), findings }, null, 2);
 }
 
-/** Titles routinely contain a pipe ("Buy Widgets | Acme"), which would split the row. */
-const escapeCell = (value: string) => value.replace(/\|/g, '\\|');
+/**
+ * A pipe splits the row ("Buy Widgets | Acme"), and an angle bracket is parsed
+ * as inline HTML, so `The <h1> was removed.` renders as `The  was removed.` —
+ * silently dropping the part that matters. This reporter exists to be read in a
+ * PR comment, so both have to survive.
+ */
+const escapeCell = (value: string) =>
+  value.replace(/\|/g, '\\|').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
 /** Markdown table, sized for a PR comment. */
 export function formatMarkdown(findings: Finding[]): string {

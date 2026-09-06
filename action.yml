@@ -1,0 +1,123 @@
+name: pagetrace
+description: Diff your site's SEO and AEO surface against a baseline and comment the result on the pull request.
+author: shyam
+branding:
+  icon: git-commit
+  color: blue
+
+inputs:
+  dir:
+    description: Directory of built HTML to check.
+    required: false
+  url:
+    description: Live origin to crawl instead of a directory.
+    required: false
+  baseline-branch:
+    description: Git ref holding the baseline lockfile. Leave empty to use the lockfile on disk.
+    required: false
+    default: ''
+  lockfile:
+    description: Path to the lockfile, within the working tree or the baseline ref.
+    required: false
+    default: pagetrace.lock.json
+  config:
+    description: Path to the config file.
+    required: false
+    default: pagetrace.config.json
+  fail-on:
+    description: 'Severity that fails the job: error, warn or info.'
+    required: false
+    default: error
+  audit:
+    description: Run the absolute rules as well as the diff. Set false for a pure regression gate.
+    required: false
+    default: 'true'
+  limit:
+    description: Maximum pages to crawl.
+    required: false
+    default: '200'
+  comment:
+    description: Post the findings as a pull request comment.
+    required: false
+    default: 'true'
+  version:
+    description: Version of pagetrace to run.
+    required: false
+    default: latest
+  github-token:
+    description: Token used to post the comment.
+    required: false
+    default: ${{ github.token }}
+
+outputs:
+  findings:
+    description: Markdown report of the findings.
+    value: ${{ steps.run.outputs.markdown }}
+  exit-code:
+    description: 0 clean, 1 findings at or above fail-on, 2 the run itself failed.
+    value: ${{ steps.run.outputs.exit-code }}
+
+runs:
+  using: composite
+  steps:
+    # A shallow checkout usually has only the PR head, so the baseline ref has
+    # to be fetched before pagetrace can read a lockfile out of it.
+    - name: Fetch baseline ref
+      if: inputs.baseline-branch != ''
+      shell: bash
+      env:
+        BASELINE: ${{ inputs.baseline-branch }}
+      run: git fetch --no-tags --depth=1 origin "+refs/heads/${BASELINE#origin/}:refs/remotes/origin/${BASELINE#origin/}"
+
+    - name: Run pagetrace
+      id: run
+      shell: bash
+      env:
+        VERSION: ${{ inputs.version }}
+        DIR: ${{ inputs.dir }}
+        URL: ${{ inputs.url }}
+        BASELINE: ${{ inputs.baseline-branch }}
+        LOCKFILE: ${{ inputs.lockfile }}
+        CONFIG: ${{ inputs.config }}
+        FAIL_ON: ${{ inputs.fail-on }}
+        AUDIT: ${{ inputs.audit }}
+        LIMIT: ${{ inputs.limit }}
+      run: |
+        # if-blocks rather than `[ ... ] && args+=(...)`: composite steps run
+        # under `bash -e`, where a false condition on the last such line exits
+        # the step non-zero. That is safe only until someone reorders these.
+        args=(check --lockfile "$LOCKFILE" --config "$CONFIG" --fail-on "$FAIL_ON" --limit "$LIMIT" --format markdown)
+        if [ -n "$DIR" ]; then args+=(--dir "$DIR"); fi
+        if [ -n "$URL" ]; then args+=(--url "$URL"); fi
+        if [ -n "$BASELINE" ]; then args+=(--baseline-branch "origin/${BASELINE#origin/}"); fi
+        if [ "$AUDIT" = "false" ]; then args+=(--no-audit); fi
+
+        set +e
+        npx --yes "pagetrace@$VERSION" "${args[@]}" > report.md
+        code=$?
+        set -e
+
+        echo "exit-code=$code" >> "$GITHUB_OUTPUT"
+        {
+          echo 'markdown<<PAGETRACE_EOF'
+          cat report.md
+          echo 'PAGETRACE_EOF'
+        } >> "$GITHUB_OUTPUT"
+        cat report.md >> "$GITHUB_STEP_SUMMARY"
+
+    # Edits the previous comment rather than adding one per push, so a long PR
+    # does not accumulate a wall of stale reports.
+    - name: Comment on the pull request
+      if: inputs.comment == 'true' && github.event_name == 'pull_request'
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.github-token }}
+        PR: ${{ github.event.pull_request.number }}
+      run: |
+        gh pr comment "$PR" --body-file report.md --edit-last --create-if-none
+
+    - name: Apply the exit code
+      shell: bash
+      env:
+        CODE: ${{ steps.run.outputs.exit-code }}
+      run: exit "$CODE"

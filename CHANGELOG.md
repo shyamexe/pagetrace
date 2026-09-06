@@ -6,6 +6,30 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.5.0] - 2026-09-06
+
+### Added
+
+- `check --baseline-branch <ref>` reads the baseline lockfile out of a git ref
+  instead of the working tree, so a pull request can diff against `main` without
+  carrying a lockfile of its own. Commit the lockfile on the default branch only
+  and feature branches stop churning it. An unresolvable ref throws rather than
+  reading as an empty baseline, since a typo must not mean "nothing changed"; a
+  ref that simply has no lockfile yet returns nothing, which is an ordinary
+  first run.
+- A composite GitHub Action (`action.yml`). Three lines in a workflow run the
+  check and post the findings as a pull request comment, editing the previous
+  comment on each push rather than stacking new ones. It fetches the baseline ref
+  first, since a shallow CI checkout usually has only the PR head.
+- `snapshotFromGitRef(ref, path)` is exported.
+
+### Fixed
+
+- `formatMarkdown` escapes angle brackets. `The <h1> was removed.` rendered as
+  `The  was removed.` on GitHub, which parses a tag name in a table cell as
+  inline HTML and drops it — losing the part of the message that mattered, in
+  the reporter whose whole purpose is the pull request comment.
+
 ## [0.4.0] - 2026-09-06
 
 ### Changed
@@ -170,6 +194,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.5.0]: https://github.com/shyamexe/pagetrace/compare/v0.4.0...v0.5.0
 [0.4.0]: https://github.com/shyamexe/pagetrace/compare/v0.3.0...v0.4.0
 [0.3.0]: https://github.com/shyamexe/pagetrace/compare/v0.2.0...v0.3.0
 [0.2.0]: https://github.com/shyamexe/pagetrace/compare/v0.1.0...v0.2.0

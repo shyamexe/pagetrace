@@ -18,7 +18,12 @@ import {
   shouldFail,
   summarize,
 } from './report.js';
-import { sameSurface, snapshotFromDir, snapshotFromOrigin } from './snapshot.js';
+import {
+  sameSurface,
+  snapshotFromDir,
+  snapshotFromGitRef,
+  snapshotFromOrigin,
+} from './snapshot.js';
 import type { Config, Severity, Snapshot } from './types.js';
 
 /** Injected from package.json at build time; see tsup.config.ts. */
@@ -128,22 +133,26 @@ cli
   .option('--fail-on <severity>', 'error | warn | info', { default: 'error' })
   .option('--audit', 'Also run absolute rules, not just the diff', { default: true })
   .option('--update', 'Write the new state to the lockfile after reporting')
+  .option('--baseline-branch <ref>', 'Read the baseline lockfile from a git ref instead of disk')
   .action(async (flags) => {
     const failOn = parseFailOn(flags.failOn, false) as Severity;
     const config = await loadConfig(flags.config);
     const next = await build(flags, config);
 
-    let previous: Snapshot | null = null;
-    try {
-      previous = JSON.parse(await readFile(flags.lockfile, 'utf8')) as Snapshot;
-    } catch {
-      previous = null;
-    }
+    // A pull request should be able to diff against main's baseline without
+    // carrying a lockfile of its own, which is what makes this usable on a repo
+    // that does not want lockfile churn in every feature branch.
+    const previous = flags.baselineBranch
+      ? await snapshotFromGitRef(flags.baselineBranch, flags.lockfile)
+      : await readFile(flags.lockfile, 'utf8')
+          .then((text) => JSON.parse(text) as Snapshot)
+          .catch(() => null);
 
     if (!previous) {
-      console.error(
-        pc.yellow(`No lockfile at ${flags.lockfile}. Run \`pagetrace snapshot\` first to set a baseline.`),
-      );
+      const where = flags.baselineBranch
+        ? `No ${flags.lockfile} at ${flags.baselineBranch}.`
+        : `No lockfile at ${flags.lockfile}.`;
+      console.error(pc.yellow(`${where} Run \`pagetrace snapshot\` first to set a baseline.`));
     }
 
     const raw = [

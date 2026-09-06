@@ -28,6 +28,7 @@ export {
   routeFromUrl,
   sameSurface,
   shouldIgnore,
+  snapshotFromGitRef,
   snapshotFromDir,
   snapshotFromOrigin,
 } from './snapshot.js';

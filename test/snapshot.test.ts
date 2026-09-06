@@ -1,5 +1,9 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
-import { sameSurface, snapshotFromOrigin } from '../src/snapshot.js';
+import { execFileSync } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { sameSurface, snapshotFromGitRef, snapshotFromOrigin } from '../src/snapshot.js';
 
 const ORIGIN = 'https://example.com';
 
@@ -25,6 +29,44 @@ function stubNetwork(routes: Record<string, string | Error | null>) {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe('snapshotFromGitRef', () => {
+  let repo: string;
+  const cwd = process.cwd();
+  const git = (...args: string[]) => execFileSync('git', args, { cwd: repo, stdio: 'pipe' });
+
+  beforeEach(() => {
+    repo = mkdtempSync(join(tmpdir(), 'pagetrace-git-'));
+    git('init', '-q', '-b', 'main');
+    git('config', 'user.email', 'test@example.com');
+    git('config', 'user.name', 'test');
+    writeFileSync(join(repo, 'pagetrace.lock.json'), JSON.stringify({ schemaVersion: 1, createdAt: 'x', site: {}, pages: { '/': { route: '/' } } }));
+    git('add', '-A');
+    git('commit', '-qm', 'baseline');
+    process.chdir(repo);
+  });
+
+  afterEach(() => {
+    process.chdir(cwd);
+    rmSync(repo, { recursive: true, force: true });
+  });
+
+  it('reads a lockfile committed on another ref', async () => {
+    const snapshot = await snapshotFromGitRef('main', 'pagetrace.lock.json');
+    expect(Object.keys(snapshot!.pages)).toEqual(['/']);
+  });
+
+  it('returns null when the ref has no lockfile, an ordinary first run', async () => {
+    expect(await snapshotFromGitRef('main', 'nope.lock.json')).toBeNull();
+  });
+
+  it('throws on an unresolvable ref rather than reading it as an empty baseline', async () => {
+    // A typo here must not silently mean "nothing changed".
+    await expect(snapshotFromGitRef('no-such-branch', 'pagetrace.lock.json')).rejects.toThrow(
+      /Cannot resolve git ref/,
+    );
+  });
+});
 
 describe('sameSurface', () => {
   const base = {

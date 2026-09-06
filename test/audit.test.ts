@@ -145,6 +145,20 @@ describe('formatMarkdown', () => {
     expect(row.match(/(?<!\\)\|/g)).toHaveLength(5);
     expect(row).toContain('Buy Widgets \\| Acme');
   });
+
+  it('escapes angle brackets so a tag name is not eaten as inline HTML', () => {
+    const finding: Finding = {
+      code: 'h1.removed',
+      severity: 'error',
+      route: '/',
+      message: 'The <h1> was removed.',
+    };
+    const row = formatMarkdown([finding])
+      .split('\n')
+      .find((line) => line.includes('h1.removed'))!;
+    expect(row).toContain('The &lt;h1&gt; was removed.');
+    expect(row).not.toContain('<h1>');
+  });
 });
 
 describe('shouldFail', () => {

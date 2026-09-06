@@ -151,9 +151,30 @@ Every finding has a stable `code`. Set any code to `error`, `warn`, `info`, or `
 
 ## CI
 
+The GitHub Action is the shortest path. It diffs the build against the baseline committed on your default branch and leaves the result as a pull request comment, updating that same comment on each push rather than stacking new ones.
+
 ```yaml
-- run: npm run build
-- run: npx pagetrace check --dir ./out --format github
+- uses: actions/checkout@v5
+- run: npm ci && npm run build
+- uses: shyamexe/pagetrace@v1
+  with:
+    dir: ./out
+    baseline-branch: main
+```
+
+`baseline-branch` reads the lockfile out of a git ref rather than the working tree, so feature branches never carry one and you get no lockfile churn in pull requests. Commit the lockfile on your default branch only:
+
+```bash
+npx pagetrace snapshot --dir ./out
+git add pagetrace.lock.json
+```
+
+Needs `pull-requests: write` for the comment. Set `comment: false` to skip it, or `audit: false` for a pure regression gate.
+
+Without the Action:
+
+```yaml
+- run: npx pagetrace check --dir ./out --baseline-branch origin/main --format github
 ```
 
 `--format` accepts `pretty`, `json`, `markdown` (sized for a PR comment), and `github` (workflow annotations).

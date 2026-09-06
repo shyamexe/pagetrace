@@ -1,5 +1,7 @@
+import { execFile } from 'node:child_process';
 import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
+import { promisify } from 'node:util';
 import {
   extractLlmsTxt,
   extractPage,
@@ -23,6 +25,39 @@ export function routeFromUrl(url: string): string {
     return path === '' ? '/' : path;
   } catch {
     return url;
+  }
+}
+
+const exec = promisify(execFile);
+
+/**
+ * Read a committed lockfile out of a git ref rather than the working tree, so a
+ * pull request can diff against the baseline on `main` without carrying a
+ * lockfile of its own. Returns null when the ref has no lockfile at that path —
+ * an ordinary first run — but throws when the ref itself is unresolvable, since
+ * a typo in `--baseline-branch` must not read as "nothing to compare".
+ */
+export async function snapshotFromGitRef(ref: string, path: string): Promise<Snapshot | null> {
+  try {
+    await exec('git', ['rev-parse', '--verify', '--quiet', `${ref}^{commit}`]);
+  } catch (cause) {
+    throw new Error(
+      `Cannot resolve git ref "${ref}". Fetch it first — a shallow CI checkout often has only the PR head.`,
+      { cause },
+    );
+  }
+
+  let stdout: string;
+  try {
+    ({ stdout } = await exec('git', ['show', `${ref}:${path}`], { maxBuffer: 256 * 1024 * 1024 }));
+  } catch {
+    return null;
+  }
+
+  try {
+    return JSON.parse(stdout) as Snapshot;
+  } catch (cause) {
+    throw new Error(`${path} at ${ref} is not valid JSON.`, { cause });
   }
 }
 
