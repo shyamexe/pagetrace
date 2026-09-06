@@ -31,9 +31,25 @@ const SCALAR_FIELDS: FieldRule[] = [
   { field: 'canonical', label: 'Canonical', code: 'canonical', onRemoved: 'error', onChanged: 'warn', onAdded: 'info' },
 ];
 
+/**
+ * Keyed by @id where available so a reordered @graph is not reported as a
+ * change. Most templates emit no @id at all, and several entities of one type
+ * on a page is the norm (a category page of Products, a FAQPage of Questions),
+ * so those fall back to a positional key: keying on the bare type would collapse
+ * them into one and hide every removal but the last.
+ */
 function indexEntities(entities: JsonLdEntity[]): Map<string, JsonLdEntity> {
   const map = new Map<string, JsonLdEntity>();
-  for (const entity of entities) map.set(entity.id ?? entity.type, entity);
+  const seen = new Map<string, number>();
+  for (const entity of entities) {
+    if (entity.id !== undefined && !map.has(entity.id)) {
+      map.set(entity.id, entity);
+      continue;
+    }
+    const nth = (seen.get(entity.type) ?? 0) + 1;
+    seen.set(entity.type, nth);
+    map.set(`${entity.type}#${nth}`, entity);
+  }
   return map;
 }
 
@@ -72,8 +88,6 @@ export function diffPage(before: PageFingerprint, after: PageFingerprint): Findi
   if (!wasNofollow && isNofollow)
     push('robots.nofollow.added', 'warn', 'Page became nofollow.', { after: after.robots });
 
-  // Structured data, keyed by @id where available so a reordered @graph is not
-  // reported as a change.
   const beforeEntities = indexEntities(before.jsonLd);
   const afterEntities = indexEntities(after.jsonLd);
 
@@ -92,12 +106,10 @@ export function diffPage(before: PageFingerprint, after: PageFingerprint): Findi
     const prev = beforeEntities.get(key)!;
     const dropped = prev.properties.filter((p) => !entity.properties.includes(p));
     if (dropped.length > 0) {
-      push(
-        'jsonld.property.removed',
-        'error',
-        `${entity.type} lost ${dropped.length === 1 ? 'property' : 'properties'}: ${dropped.join(', ')}.`,
-        { before: prev.properties, after: entity.properties },
-      );
+      push('jsonld.property.removed', 'error', `${entity.type} lost structured data properties.`, {
+        before: prev.properties,
+        after: entity.properties,
+      });
     }
   }
 
@@ -110,12 +122,12 @@ export function diffPage(before: PageFingerprint, after: PageFingerprint): Findi
     const a = after[group];
     const dropped = Object.keys(b).filter((k) => !(k in a));
     if (dropped.length > 0)
-      push(`${group}.removed`, 'warn', `${label} tags removed: ${dropped.join(', ')}.`, { before: dropped });
+      push(`${group}.removed`, 'warn', `${label} tags were removed.`, { before: dropped });
   }
 
   const droppedHreflang = Object.keys(before.hreflang).filter((k) => !(k in after.hreflang));
   if (droppedHreflang.length > 0)
-    push('hreflang.removed', 'warn', `hreflang alternates removed: ${droppedHreflang.join(', ')}.`, {
+    push('hreflang.removed', 'warn', 'hreflang alternates were removed.', {
       before: droppedHreflang,
     });
 
@@ -133,12 +145,10 @@ export function diffPage(before: PageFingerprint, after: PageFingerprint): Findi
   if (before.wordCount > 0) {
     const ratio = after.wordCount / before.wordCount;
     if (ratio < 0.5)
-      push(
-        'content.dropped',
-        'error',
-        `Word count fell from ${before.wordCount} to ${after.wordCount} (${Math.round((1 - ratio) * 100)}% loss).`,
-        { before: before.wordCount, after: after.wordCount },
-      );
+      push('content.dropped', 'error', 'Word count fell by more than half.', {
+        before: before.wordCount,
+        after: after.wordCount,
+      });
   }
 
   return findings;

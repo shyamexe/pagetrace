@@ -77,6 +77,39 @@ describe('extractPage', () => {
     expect(result.leadAnswerWords).toBeGreaterThan(8);
   });
 
+  it('reads meta and link keywords case-insensitively', () => {
+    const shouty = extractPage(
+      `<html><head>
+         <meta NAME="Description" content="From a CMS that shouts.">
+         <link REL="Canonical" href="https://example.com/x">
+         <meta name="Robots" content="NOINDEX, follow">
+         <meta name="Generator" content="WordPress 6.5">
+         <link rel="Alternate stylesheet" hreflang="EN" href="https://example.com/en/x">
+         <script type="Application/LD+JSON">{"@type":"Article"}</script>
+       </head><body><h1>H</h1></body></html>`,
+      '/x',
+    );
+    expect(shouty.description).toBe('From a CMS that shouts.');
+    expect(shouty.canonical).toBe('https://example.com/x');
+    expect(shouty.robots).toBe('noindex, follow');
+    expect(shouty.generator).toBe('WordPress 6.5');
+    expect(shouty.hreflang).toEqual({ en: 'https://example.com/en/x' });
+    expect(shouty.jsonLd.map((e) => e.type)).toEqual(['Article']);
+  });
+
+  it('measures the lead after the h1, not a cookie banner above it', () => {
+    const banner = extractPage(
+      `<html><body>
+         <header><p>We use cookies to improve your experience on this website, always.</p></header>
+         <h1>Title</h1>
+         <p>Short one.</p>
+         <p>The actual lead paragraph runs long enough to be worth quoting in an answer engine.</p>
+       </body></html>`,
+      '/x',
+    );
+    expect(banner.leadAnswerWords).toBe(15);
+  });
+
   it('returns nulls rather than throwing on an empty document', () => {
     const empty = extractPage('<html><body></body></html>', '/');
     expect(empty.title).toBeNull();
@@ -159,6 +192,16 @@ describe('extractLlmsTxt', () => {
 });
 
 describe('extractSitemapUrls', () => {
+  it('decodes XML entities in a query string', () => {
+    const xml = '<urlset><url><loc>https://a.test/p?b=1&amp;c=2</loc></url></urlset>';
+    expect(extractSitemapUrls(xml)).toEqual(['https://a.test/p?b=1&c=2']);
+  });
+
+  it('reads CDATA-wrapped locations', () => {
+    const xml = '<urlset><url><loc><![CDATA[https://a.test/p]]></loc></url></urlset>';
+    expect(extractSitemapUrls(xml)).toEqual(['https://a.test/p']);
+  });
+
   it('reads loc entries regardless of whitespace', () => {
     const xml = `<urlset><url><loc>https://a.test/</loc></url><url><loc>
       https://a.test/b </loc></url></urlset>`;

@@ -12,7 +12,6 @@ Existing SEO and AEO tools tell you your score **right now**. They don't tell yo
 npm install -D pagetrace
 ```
 
-The CLI is available as `pagetrace` and as the shorter `pgt`.
 
 ## Use
 

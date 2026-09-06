@@ -71,7 +71,7 @@ describe('auditCrossPage', () => {
     );
     const finding = findings.find((f) => f.code === 'canonical.crosspath');
     expect(finding?.route).toBe('/services');
-    expect(finding?.message).toContain('/home');
+    expect(finding?.after).toBe('https://example.com/home');
   });
 
   it('accepts a self-referencing canonical with a trailing slash', () => {

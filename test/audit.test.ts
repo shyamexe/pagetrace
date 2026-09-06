@@ -131,7 +131,28 @@ describe('applyConfig', () => {
   });
 });
 
+describe('formatMarkdown', () => {
+  it('escapes a pipe in a message so the table row does not split', () => {
+    const finding: Finding = {
+      code: 'duplicate.title',
+      severity: 'warn',
+      route: null,
+      message: '3 pages share the title "Buy Widgets | Acme".',
+    };
+    const row = formatMarkdown([finding])
+      .split('\n')
+      .find((line) => line.includes('duplicate.title'))!;
+    expect(row.match(/(?<!\\)\|/g)).toHaveLength(5);
+    expect(row).toContain('Buy Widgets \\| Acme');
+  });
+});
+
 describe('shouldFail', () => {
+  it('throws rather than silently passing on an unknown severity', () => {
+    // The gate going quiet on a typo is worse than the run failing.
+    expect(() => shouldFail([], 'warning' as never)).toThrow(/Unknown severity/);
+  });
+
   const findings: Finding[] = [{ code: 'a', severity: 'warn', route: '/', message: 'x' }];
 
   it('fails only at or above the configured threshold', () => {

@@ -77,10 +77,31 @@ describe('auditHreflang', () => {
     expect(codes(auditHreflang(snapshot([en])))).not.toContain('hreflang.nonreciprocal');
   });
 
-  it('flags a page missing hreflang when the rest of the site has it', () => {
-    const findings = auditHreflang(snapshot([...complete(), page('/en/contact')]));
+  it('flags a page that is named as an alternate but annotates nothing back', () => {
+    const en = page('/en/contact', {
+      en: 'https://example.com/en/contact',
+      ml: 'https://example.com/ml/contact',
+    });
+    const findings = auditHreflang(snapshot([en, page('/ml/contact')]));
     const missing = findings.find((f) => f.code === 'hreflang.missing');
-    expect(missing?.route).toBe('/en/contact');
+    expect(missing?.route).toBe('/ml/contact');
+  });
+
+  it('leaves a page alone when nothing points at it', () => {
+    // A --limit crawl, or a monolingual section of a partly translated site:
+    // no annotated page claims /en/pricing, so its silence proves nothing.
+    const findings = auditHreflang(snapshot([...complete(), page('/en/pricing')]));
+    expect(codes(findings)).not.toContain('hreflang.missing');
+  });
+
+  it('does not accuse a noindexed page of being its own bad alternate', () => {
+    const en = { ...complete()[0], robots: 'noindex, follow' };
+    const findings = auditHreflang(snapshot([en, complete()[1]]));
+    // /ml/about flagging /en/about is correct; /en/about flagging itself is not.
+    const self = findings.filter(
+      (f) => f.code === 'hreflang.noindex.target' && f.route === '/en/about',
+    );
+    expect(self).toEqual([]);
   });
 
   it('requires a self-reference', () => {
@@ -123,7 +144,9 @@ describe('auditHreflang', () => {
     const [en] = complete();
     const ml = { ...complete()[1], robots: 'noindex, follow' };
     const findings = auditHreflang(snapshot([en, ml]));
-    expect(codes(findings)).toContain('hreflang.noindex.target');
+    expect(codes(findings).filter((c) => c === 'hreflang.noindex.target')).toEqual([
+      'hreflang.noindex.target',
+    ]);
   });
 });
 

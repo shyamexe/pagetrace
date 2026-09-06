@@ -2,7 +2,6 @@
 import { readFile, writeFile } from 'node:fs/promises';
 import { cac } from 'cac';
 import pc from 'picocolors';
-import { writeFile as write } from 'node:fs/promises';
 import { auditSnapshot } from './audit.js';
 import { diffSnapshots } from './diff.js';
 import { detectPlatform, withGuidance } from './rules/guidance.js';
@@ -22,6 +21,9 @@ import {
 import { snapshotFromDir, snapshotFromOrigin } from './snapshot.js';
 import type { Config, Severity, Snapshot } from './types.js';
 
+/** Injected from package.json at build time; see tsup.config.ts. */
+declare const __VERSION__: string;
+
 const DEFAULT_LOCKFILE = 'pagetrace.lock.json';
 const DEFAULT_CONFIG = 'pagetrace.config.json';
 
@@ -30,6 +32,20 @@ interface SourceFlags {
   url?: string;
   limit?: number;
   concurrency?: number;
+}
+
+const SEVERITIES: Severity[] = ['error', 'warn', 'info'];
+
+/**
+ * Validated up front: an unrecognised value used to leave the exit gate
+ * permanently off, so `check --fail-on warning` printed errors and went green.
+ */
+function parseFailOn(value: unknown, allowNever: boolean): Severity | 'never' {
+  const expected = [...SEVERITIES, ...(allowNever ? ['never'] : [])].join(' | ');
+  if (typeof value !== 'string') throw new Error(`--fail-on needs a value. Expected ${expected}.`);
+  if (allowNever && value === 'never') return 'never';
+  if ((SEVERITIES as string[]).includes(value)) return value as Severity;
+  throw new Error(`Invalid --fail-on "${value}". Expected ${expected}.`);
 }
 
 async function loadConfig(path = DEFAULT_CONFIG): Promise<Config> {
@@ -95,6 +111,7 @@ cli
   .option('--audit', 'Also run absolute rules, not just the diff', { default: true })
   .option('--update', 'Write the new state to the lockfile after reporting')
   .action(async (flags) => {
+    const failOn = parseFailOn(flags.failOn, false) as Severity;
     const config = await loadConfig(flags.config);
     const next = await build(flags, config);
 
@@ -106,7 +123,7 @@ cli
     }
 
     if (!previous) {
-      console.log(
+      console.error(
         pc.yellow(`No lockfile at ${flags.lockfile}. Run \`pagetrace snapshot\` first to set a baseline.`),
       );
     }
@@ -121,13 +138,13 @@ cli
 
     if (flags.update) {
       await writeFile(flags.lockfile, `${JSON.stringify(next, null, 2)}\n`, 'utf8');
-      console.log(pc.dim(`Updated ${flags.lockfile}.`));
+      console.error(pc.dim(`Updated ${flags.lockfile}.`));
     }
 
     const summary = summarize(findings);
-    if (previous && shouldFail(findings, flags.failOn as Severity)) {
+    if (previous && shouldFail(findings, failOn)) {
       console.error(
-        pc.red(`\nFailing: ${summary.error} error, ${summary.warn} warning (--fail-on ${flags.failOn}).`),
+        pc.red(`\nFailing: ${summary.error} error, ${summary.warn} warning (--fail-on ${failOn}).`),
       );
       process.exitCode = 1;
     }
@@ -144,6 +161,7 @@ cli
   .option('--out <file>', 'Write the report to a file instead of stdout')
   .option('--fail-on <severity>', 'error | warn | info | never', { default: 'never' })
   .action(async (flags) => {
+    const failOn = parseFailOn(flags.failOn, true);
     const config = await loadConfig(flags.config);
     const snapshot = await build(flags, config);
     const pages = Object.values(snapshot.pages);
@@ -184,19 +202,19 @@ cli
             : formatAuditPretty(groups, meta);
 
     if (flags.out) {
-      await write(flags.out, `${output}\n`, 'utf8');
+      await writeFile(flags.out, `${output}\n`, 'utf8');
       console.log(pc.green(`Wrote ${flags.out} — ${groups.length} issue types across ${pages.length} pages.`));
     } else {
       console.log(output);
     }
 
-    if (flags.failOn !== 'never' && shouldFail(findings, flags.failOn as Severity)) {
+    if (failOn !== 'never' && shouldFail(findings, failOn)) {
       process.exitCode = 1;
     }
   });
 
 cli.help();
-cli.version('0.1.0');
+cli.version(__VERSION__);
 
 async function main() {
   try {

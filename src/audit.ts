@@ -133,6 +133,16 @@ export function auditSite(snapshot: Snapshot): Finding[] {
   return findings;
 }
 
+/** Path portion of a canonical or hreflang href, normalized to match a snapshot route. */
+function pathOf(href: string): string | null {
+  try {
+    const path = new URL(href, 'https://placeholder.invalid').pathname.replace(/\/+$/, '');
+    return path === '' ? '/' : path;
+  } catch {
+    return null;
+  }
+}
+
 /**
  * Rules that only exist when you look at the whole site at once. These are the
  * findings that matter most on a large CMS site, where the defects come from
@@ -191,35 +201,20 @@ export function auditCrossPage(snapshot: Snapshot): Finding[] {
 
   for (const page of pages) {
     if (!page.canonical) continue;
-    let path: string;
-    try {
-      path = new URL(page.canonical, 'https://placeholder.invalid').pathname;
-    } catch {
-      continue;
-    }
-    const normalized = path.replace(/\/+$/, '') || '/';
-    if (normalized !== page.route) {
+    const normalized = pathOf(page.canonical);
+    if (normalized !== null && normalized !== page.route) {
       findings.push({
         code: 'canonical.crosspath',
         severity: 'warn',
         route: page.route,
-        message: `Canonical points to ${normalized}, not this page.`,
+        message: 'Canonical points to a different path.',
+        before: page.route,
         after: page.canonical,
       });
     }
   }
 
   return findings;
-}
-
-/** Path portion of an hreflang href, normalized to match a snapshot route. */
-function pathOf(href: string): string | null {
-  try {
-    const path = new URL(href, 'https://placeholder.invalid').pathname.replace(/\/+$/, '');
-    return path === '' ? '/' : path;
-  } catch {
-    return null;
-  }
 }
 
 const LANG_TAG = /^[a-z]{2,3}(-[a-zA-Z0-9]{2,8})*$/i;
@@ -241,16 +236,29 @@ export function auditHreflang(snapshot: Snapshot): Finding[] {
 
   const byRoute = new Map(pages.map((p) => [p.route, p]));
 
+  // Routes another page names as an alternate. Restricting hreflang.missing to
+  // these keeps the rule honest on a partial crawl: a page nobody points at
+  // proves nothing, exactly as an absent page proves nothing about reciprocity.
+  const claimed = new Set<string>();
+  for (const page of annotated) {
+    for (const href of Object.values(page.hreflang)) {
+      const target = pathOf(href);
+      if (target !== null && target !== page.route) claimed.add(target);
+    }
+  }
+
   for (const page of pages) {
     const entries = Object.entries(page.hreflang);
 
     if (entries.length === 0) {
-      findings.push({
-        code: 'hreflang.missing',
-        severity: 'warn',
-        route: page.route,
-        message: 'Page has no hreflang annotations while the rest of the site does.',
-      });
+      if (claimed.has(page.route)) {
+        findings.push({
+          code: 'hreflang.missing',
+          severity: 'warn',
+          route: page.route,
+          message: 'Page is named as an hreflang alternate but declares none of its own.',
+        });
+      }
       continue;
     }
 
@@ -267,9 +275,11 @@ export function auditHreflang(snapshot: Snapshot): Finding[] {
       });
     }
 
-    const targets = entries
-      .map(([, href]) => pathOf(href))
-      .filter((p): p is string => p !== null);
+    const targets = [
+      ...new Set(
+        entries.map(([, href]) => pathOf(href)).filter((p): p is string => p !== null),
+      ),
+    ];
 
     if (!targets.includes(page.route)) {
       findings.push({
@@ -312,6 +322,7 @@ export function auditHreflang(snapshot: Snapshot): Finding[] {
     }
 
     for (const target of targets) {
+      if (target === page.route) continue;
       const other = byRoute.get(target);
       if (other?.robots?.includes('noindex')) {
         findings.push({

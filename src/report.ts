@@ -26,7 +26,13 @@ export function summarize(findings: Finding[]) {
 }
 
 export function shouldFail(findings: Finding[], failOn: Severity): boolean {
-  return findings.some((f) => ORDER[f.severity] <= ORDER[failOn]);
+  const threshold = ORDER[failOn];
+  // An unknown severity would make every comparison false and silently disable
+  // the gate, which is the one failure mode a CI check must not have.
+  if (threshold === undefined) {
+    throw new Error(`Unknown severity "${failOn}". Expected one of: error, warn, info.`);
+  }
+  return findings.some((f) => ORDER[f.severity] <= threshold);
 }
 
 const BADGE: Record<Severity, (s: string) => string> = {
@@ -63,13 +69,16 @@ export function formatJson(findings: Finding[]): string {
   return JSON.stringify({ schemaVersion: 1, summary: summarize(findings), findings }, null, 2);
 }
 
+/** Titles routinely contain a pipe ("Buy Widgets | Acme"), which would split the row. */
+const escapeCell = (value: string) => value.replace(/\|/g, '\\|');
+
 /** Markdown table, sized for a PR comment. */
 export function formatMarkdown(findings: Finding[]): string {
   const s = summarize(findings);
   if (findings.length === 0) return '### pagetrace\n\nNo SEO/AEO changes or issues found.';
 
   const rows = findings.map(
-    (f) => `| ${f.severity} | \`${f.route ?? '—'}\` | ${f.message} | \`${f.code}\` |`,
+    (f) => `| ${f.severity} | \`${escapeCell(f.route ?? '—')}\` | ${escapeCell(f.message)} | \`${f.code}\` |`,
   );
   return [
     '### pagetrace',

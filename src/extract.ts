@@ -10,13 +10,34 @@ function text(el: HTMLElement | null): string | null {
   return value.length > 0 ? value : null;
 }
 
-function attr(root: HTMLElement, selector: string, name = 'content'): string | null {
-  const el = root.querySelector(selector);
-  if (!el) return null;
-  const value = el.getAttribute(name);
-  if (value === undefined || value === null) return null;
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
+/**
+ * HTML keywords are case-insensitive (`<meta NAME="Description">`, `rel="Canonical"`)
+ * but CSS attribute selectors are not, so we match on lowercased values rather
+ * than through querySelector.
+ */
+function metaContent(root: HTMLElement, name: string): string | null {
+  for (const el of root.querySelectorAll('meta')) {
+    if (el.getAttribute('name')?.trim().toLowerCase() !== name) continue;
+    const value = el.getAttribute('content')?.trim();
+    if (value) return value;
+  }
+  return null;
+}
+
+/** `rel` is a space-separated token list, e.g. `rel="alternate stylesheet"`. */
+function hasRel(el: HTMLElement, rel: string): boolean {
+  const value = el.getAttribute('rel');
+  if (!value) return false;
+  return value.trim().toLowerCase().split(/\s+/).includes(rel);
+}
+
+function linkHref(root: HTMLElement, rel: string): string | null {
+  for (const el of root.querySelectorAll('link')) {
+    if (!hasRel(el, rel)) continue;
+    const href = el.getAttribute('href')?.trim();
+    if (href) return href;
+  }
+  return null;
 }
 
 /**
@@ -38,7 +59,8 @@ function metaGroup(root: HTMLElement, prefix: string): Record<string, string> {
 
 function hreflangMap(root: HTMLElement): Record<string, string> {
   const out: Record<string, string> = {};
-  for (const el of root.querySelectorAll('link[rel="alternate"]')) {
+  for (const el of root.querySelectorAll('link')) {
+    if (!hasRel(el, 'alternate')) continue;
     const lang = el.getAttribute('hreflang');
     const href = el.getAttribute('href');
     if (lang && href) out[lang.toLowerCase()] = href.trim();
@@ -77,7 +99,8 @@ function flattenJsonLd(node: unknown, out: JsonLdEntity[]): void {
 
 export function extractJsonLd(root: HTMLElement): JsonLdEntity[] {
   const entities: JsonLdEntity[] = [];
-  for (const script of root.querySelectorAll('script[type="application/ld+json"]')) {
+  for (const script of root.querySelectorAll('script')) {
+    if (script.getAttribute('type')?.trim().toLowerCase() !== 'application/ld+json') continue;
     try {
       flattenJsonLd(JSON.parse(script.textContent), entities);
     } catch {
@@ -104,10 +127,25 @@ function countWords(root: HTMLElement): number {
  * and there is nothing to quote, too long and it will not be extracted cleanly.
  */
 function leadAnswer(root: HTMLElement): number {
-  const paragraphs = root.querySelectorAll('p');
-  for (const p of paragraphs) {
-    const value = text(p);
-    if (value && value.split(' ').length >= 8) return value.split(' ').length;
+  const scope =
+    root.querySelector('main') ??
+    root.querySelector('article') ??
+    root.querySelector('body') ??
+    root;
+
+  // Cookie banners, promo strips and breadcrumbs are paragraphs too, and they
+  // sit above the h1. Anchor on the h1 so they cannot stand in for the lead.
+  const candidates = scope
+    .querySelectorAll('h1, p')
+    .filter((el) => !el.closest('header, nav, footer, aside'));
+  const firstH1 = candidates.findIndex((el) => el.tagName?.toUpperCase() === 'H1');
+
+  for (const el of candidates.slice(firstH1 + 1)) {
+    if (el.tagName?.toUpperCase() !== 'P') continue;
+    const value = text(el);
+    if (!value) continue;
+    const words = value.split(' ').length;
+    if (words >= 8) return words;
   }
   return 0;
 }
@@ -136,9 +174,9 @@ export function extractPage(html: string, route: string): PageFingerprint {
   return {
     route,
     title: text(root.querySelector('title')),
-    description: attr(root, 'meta[name="description"]'),
-    canonical: attr(root, 'link[rel="canonical"]', 'href'),
-    robots: attr(root, 'meta[name="robots"]')?.toLowerCase() ?? null,
+    description: metaContent(root, 'description'),
+    canonical: linkHref(root, 'canonical'),
+    robots: metaContent(root, 'robots')?.toLowerCase() ?? null,
     og: metaGroup(root, 'og'),
     twitter: metaGroup(root, 'twitter'),
     hreflang: hreflangMap(root),
@@ -148,7 +186,7 @@ export function extractPage(html: string, route: string): PageFingerprint {
     wordCount: countWords(root),
     images: { total: imgs.length, missingAlt },
     leadAnswerWords: leadAnswer(root),
-    generator: attr(root, 'meta[name="generator"]'),
+    generator: metaContent(root, 'generator'),
   };
 }
 
@@ -206,7 +244,28 @@ export function extractLlmsTxt(body: string) {
   return { present: true, sections, bytes: Buffer.byteLength(body, 'utf8') };
 }
 
+const XML_ENTITIES: Record<string, string> = {
+  amp: '&',
+  lt: '<',
+  gt: '>',
+  quot: '"',
+  apos: "'",
+};
+
+/** XML requires `&` in a URL to be escaped, so every query string arrives encoded. */
+function decodeXml(value: string): string {
+  return value.replace(/&(?:#(\d+)|#x([0-9a-f]+)|([a-z]+));/gi, (match, dec, hex, name) => {
+    if (dec) return String.fromCodePoint(Number(dec));
+    if (hex) return String.fromCodePoint(parseInt(hex, 16));
+    return XML_ENTITIES[String(name).toLowerCase()] ?? match;
+  });
+}
+
 /** Pull <loc> entries out of a sitemap or sitemap index. */
 export function extractSitemapUrls(xml: string): string[] {
-  return [...xml.matchAll(/<loc>\s*([^<\s]+)\s*<\/loc>/gi)].map((m) => m[1]);
+  const pattern = /<loc>\s*(?:<!\[CDATA\[([\s\S]*?)\]\]>|([^<]*?))\s*<\/loc>/gi;
+  return [...xml.matchAll(pattern)]
+    // CDATA is literal by definition; only the escaped form needs decoding.
+    .map((m) => (m[1] !== undefined ? m[1] : decodeXml(m[2] ?? '')).trim())
+    .filter((url) => url.length > 0);
 }

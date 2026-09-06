@@ -74,8 +74,24 @@ describe('diffPage', () => {
     });
     const after = page({ jsonLd: [{ type: 'Product', properties: ['name', 'image'] }] });
     const finding = diffPage(before, after).find((f) => f.code === 'jsonld.property.removed');
-    expect(finding?.message).toContain('offers');
+    // The message stays constant per type so the rollup can collapse a template
+    // defect; the properties themselves live in before/after.
+    expect(finding?.before).toEqual(['name', 'offers', 'image']);
+    expect(finding?.after).toEqual(['name', 'image']);
     expect(finding?.severity).toBe('error');
+  });
+
+  it('notices repeated entities of one type disappearing without an @id', () => {
+    const three = page({
+      jsonLd: [
+        { type: 'Product', properties: ['name'] },
+        { type: 'Product', properties: ['name'] },
+        { type: 'Product', properties: ['name'] },
+      ],
+    });
+    const one = page({ jsonLd: [{ type: 'Product', properties: ['name'] }] });
+    const removed = diffPage(three, one).filter((f) => f.code === 'jsonld.entity.removed');
+    expect(removed).toHaveLength(2);
   });
 
   it('matches entities by @id so a reordered @graph is not a change', () => {
@@ -107,7 +123,8 @@ describe('diffPage', () => {
     const findings = diffPage(page(), page({ wordCount: 40 }));
     const drop = findings.find((f) => f.code === 'content.dropped');
     expect(drop?.severity).toBe('error');
-    expect(drop?.message).toContain('90%');
+    expect(drop?.before).toBe(400);
+    expect(drop?.after).toBe(40);
   });
 
   it('ignores ordinary content edits', () => {
