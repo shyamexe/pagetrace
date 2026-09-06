@@ -3,6 +3,7 @@ import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { auditCrossPage } from '../src/audit.js';
 import { sameSurface, snapshotFromGitRef, snapshotFromOrigin } from '../src/snapshot.js';
 
 const ORIGIN = 'https://example.com';
@@ -29,6 +30,41 @@ function stubNetwork(routes: Record<string, string | Error | null>) {
 }
 
 afterEach(() => vi.unstubAllGlobals());
+
+describe('siteUrl against a local build', () => {
+  it('compares canonicals to the configured site, not the crawl URL', async () => {
+    // A preview deployment or `next start` on localhost serves pages whose
+    // canonicals point at production. Without siteUrl every page would report
+    // canonical.offsite, which would make the check useless exactly where it is
+    // most wanted.
+    stubNetwork({
+      'http://localhost:3000/sitemap.xml':
+        '<urlset><url><loc>http://localhost:3000/a</loc></url></urlset>',
+      'http://localhost:3000/a':
+        '<html><head><title>A</title><link rel="canonical" href="https://example.com/a"></head><body><h1>A</h1></body></html>',
+    });
+
+    const snapshot = await snapshotFromOrigin('http://localhost:3000', {
+      siteUrl: 'https://example.com',
+    });
+    expect(snapshot.site.origin).toBe('https://example.com');
+
+    const offsite = auditCrossPage(snapshot).filter((f) => f.code === 'canonical.offsite');
+    expect(offsite).toEqual([]);
+  });
+
+  it('falls back to the crawled origin when siteUrl is not set', async () => {
+    stubNetwork({
+      'http://localhost:3000/sitemap.xml':
+        '<urlset><url><loc>http://localhost:3000/a</loc></url></urlset>',
+      'http://localhost:3000/a':
+        '<html><head><title>A</title><link rel="canonical" href="https://example.com/a"></head><body><h1>A</h1></body></html>',
+    });
+    const snapshot = await snapshotFromOrigin('http://localhost:3000');
+    expect(snapshot.site.origin).toBe('http://localhost:3000');
+    expect(auditCrossPage(snapshot).some((f) => f.code === 'canonical.offsite')).toBe(true);
+  });
+});
 
 describe('snapshotFromGitRef', () => {
   let repo: string;

@@ -156,7 +156,7 @@ Alongside the diff, `check` runs absolute rules: missing title, canonical, `h1`,
 }
 ```
 
-`siteUrl` is only needed for a `--dir` crawl, and only to detect canonicals pointing at another host — a staging hostname leaking into production canonicals. A `--url` crawl infers it.
+`siteUrl` is what the site calls itself, which is not always where you are crawling it. It is what `canonical.offsite` compares against, so set it when checking a `--dir` build, and when crawling a local build or a preview deployment whose pages carry production canonicals. A plain crawl of production infers it.
 
 Every finding has a stable `code`. Set any code to `error`, `warn`, `info`, or `off`.
 

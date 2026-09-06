@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.8.0] - 2026-09-06
+
+### Fixed
+
+- `siteUrl` now overrides the crawled origin for an origin crawl, not just a
+  `--dir` crawl. Checking a local build or a preview deployment means crawling
+  `http://localhost:3000` while every page's canonical points at production, so
+  `canonical.offsite` fired on every page and made the check useless in exactly
+  the setup it is most wanted. Where you crawl and what the site calls itself are
+  separate things; `siteUrl` is now the authority on the latter. Without it the
+  crawled origin is still used, so nothing changes for a plain production crawl.
+
 ## [0.7.0] - 2026-09-06
 
 ### Changed
@@ -237,6 +249,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.8.0]: https://github.com/shyamexe/pagetrace/compare/v0.7.0...v0.8.0
 [0.7.0]: https://github.com/shyamexe/pagetrace/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/shyamexe/pagetrace/compare/v0.5.0...v0.6.0
 [0.5.0]: https://github.com/shyamexe/pagetrace/compare/v0.4.0...v0.5.0

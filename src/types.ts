@@ -105,8 +105,10 @@ export interface Config {
   /** Minimum word count before a page is flagged as thin. */
   minWordCount?: number;
   /**
-   * The site's own origin, e.g. "https://example.com". Lets a --dir crawl detect
-   * canonicals pointing at another host; an origin crawl infers it.
+   * The site's own origin, e.g. "https://example.com". Used to detect canonicals
+   * pointing at another host. A --dir crawl has no other source for it, and an
+   * origin crawl of a local build or preview deployment needs it to override the
+   * URL being crawled, since those serve production canonicals.
    */
   siteUrl?: string;
 }

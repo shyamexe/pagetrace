@@ -197,7 +197,15 @@ export async function snapshotFromOrigin(
   const base = new URL(origin);
   const agents = options.aiAgents ?? DEFAULT_AI_AGENTS;
   const timeout = options.timeout;
-  const site: SiteFingerprint = { origin: base.origin, robotsTxt: null, llmsTxt: null };
+  // Where we crawl and what the site calls itself are not always the same. A
+  // local build or a preview deployment serves pages whose canonicals point at
+  // production, so config.siteUrl wins when it is set — otherwise every page
+  // would report canonical.offsite against localhost.
+  const site: SiteFingerprint = {
+    origin: options.siteUrl ? new URL(options.siteUrl).origin : base.origin,
+    robotsTxt: null,
+    llmsTxt: null,
+  };
   const limit = options.limit ?? 200;
 
   const robots = await fetchText(new URL('/robots.txt', base).href, timeout);
