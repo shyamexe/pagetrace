@@ -311,9 +311,10 @@ export function formatAuditPretty(groups: Aggregate[], meta: AuditMeta, columns 
 
   lines.push(pc.dim('\u2500'.repeat(width)));
   lines.push(`${pc.bold(`${total} issue${total === 1 ? '' : 's'}`)}  ${counted}`);
+  const found = instances.error + instances.warn + instances.info;
   lines.push(
     pc.dim(
-      `${instances.error + instances.warn + instances.info} findings across ${meta.pageCount} pages`,
+      `${found} finding${found === 1 ? '' : 's'} across ${meta.pageCount} page${meta.pageCount === 1 ? '' : 's'}`,
     ),
   );
   lines.push('');

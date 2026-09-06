@@ -313,6 +313,12 @@ describe('formatAuditPretty', () => {
     expect(out).toContain('3 pages');
   });
 
+  it('does not say "1 findings"', () => {
+    const out = plain(formatAuditPretty([group({ count: 1, routes: ['/a'] })], meta, 80));
+    expect(out).toContain('1 finding across 12 pages');
+    expect(out).not.toContain('1 findings');
+  });
+
   it('says so plainly when there is nothing wrong', () => {
     expect(plain(formatAuditPretty([], meta, 80))).toContain('No issues found across 12 pages');
   });
