@@ -1,7 +1,9 @@
 name: Release
 on:
   push:
-    tags: ['v*']
+    # Semver tags only. The moving `v1` alias that Action consumers pin to also
+    # matches `v*`, and would fire a release run that fails the version guard.
+    tags: ['v*.*.*']
 
 permissions:
   contents: write   # required to create the GitHub Release
