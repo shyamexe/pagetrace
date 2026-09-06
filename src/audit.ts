@@ -133,6 +133,29 @@ export function auditSite(snapshot: Snapshot): Finding[] {
   return findings;
 }
 
+/** Origin of an absolute href. Relative hrefs have no host, so they return null. */
+function originOf(href: string): string | null {
+  try {
+    return new URL(href).origin;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A paginated archive and an AMP variant both canonicalise to their parent on
+ * purpose, and both are ordinary CMS output. Flagging them buries the canonical
+ * mistakes that are real.
+ */
+const VARIANT_SUFFIX = /(?:\/(?:page|p)\/\d+|\/amp)\/?$/i;
+const AMP_PREFIX = /^\/amp(?=\/)/i;
+
+function isVariantOf(route: string, target: string): boolean {
+  return [route.replace(VARIANT_SUFFIX, ''), route.replace(AMP_PREFIX, '')]
+    .filter((stripped) => stripped !== route)
+    .some((stripped) => (stripped === '' ? '/' : stripped) === target);
+}
+
 /** Path portion of a canonical or hreflang href, normalized to match a snapshot route. */
 function pathOf(href: string): string | null {
   try {
@@ -199,19 +222,42 @@ export function auditCrossPage(snapshot: Snapshot): Finding[] {
     }
   }
 
+  // Only checked when we know what the site's own host is: an origin crawl
+  // records it, a --dir crawl needs config.siteUrl. Guessing it from the
+  // canonicals themselves would miss the case that matters most, where a
+  // staging host has leaked into every canonical on the site.
+  const expectedOrigin = snapshot.site.origin ?? null;
+
   for (const page of pages) {
     if (!page.canonical) continue;
-    const normalized = pathOf(page.canonical);
-    if (normalized !== null && normalized !== page.route) {
-      findings.push({
-        code: 'canonical.crosspath',
-        severity: 'warn',
-        route: page.route,
-        message: 'Canonical points to a different path.',
-        before: page.route,
-        after: page.canonical,
-      });
+
+    if (expectedOrigin !== null) {
+      const host = originOf(page.canonical);
+      if (host !== null && host !== expectedOrigin) {
+        findings.push({
+          code: 'canonical.offsite',
+          severity: 'error',
+          route: page.route,
+          message: 'Canonical points at another host.',
+          before: expectedOrigin,
+          after: page.canonical,
+        });
+        continue;
+      }
     }
+
+    const normalized = pathOf(page.canonical);
+    if (normalized === null || normalized === page.route) continue;
+    if (isVariantOf(page.route, normalized)) continue;
+
+    findings.push({
+      code: 'canonical.crosspath',
+      severity: 'warn',
+      route: page.route,
+      message: 'Canonical points to a different path.',
+      before: page.route,
+      after: page.canonical,
+    });
   }
 
   return findings;

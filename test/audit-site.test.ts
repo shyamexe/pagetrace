@@ -74,6 +74,40 @@ describe('auditCrossPage', () => {
     expect(finding?.after).toBe('https://example.com/home');
   });
 
+  it('flags a canonical pointing at another host', () => {
+    const snap = snapshot([page('/services', { canonical: 'https://staging.example.net/services' })]);
+    snap.site.origin = 'https://example.com';
+    const finding = auditCrossPage(snap).find((f) => f.code === 'canonical.offsite');
+    expect(finding?.route).toBe('/services');
+    expect(finding?.severity).toBe('error');
+    // The path matches, so the path-only rule saw nothing wrong with it.
+    expect(codes(auditCrossPage(snap))).not.toContain('canonical.crosspath');
+  });
+
+  it('says nothing about hosts when the site origin is unknown', () => {
+    // A --dir crawl with no siteUrl configured: any host would be a guess.
+    const snap = snapshot([page('/services', { canonical: 'https://staging.example.net/services' })]);
+    expect(codes(auditCrossPage(snap))).not.toContain('canonical.offsite');
+  });
+
+  it('leaves paginated archives and AMP variants alone', () => {
+    const quiet = snapshot([
+      page('/blog', { canonical: 'https://example.com/blog' }),
+      page('/blog/page/2', { canonical: 'https://example.com/blog' }),
+      page('/blog/p/3', { canonical: 'https://example.com/blog' }),
+      page('/article/amp', { canonical: 'https://example.com/article' }),
+      page('/amp/guide', { canonical: 'https://example.com/guide' }),
+    ]);
+    expect(codes(auditCrossPage(quiet))).not.toContain('canonical.crosspath');
+  });
+
+  it('still flags a page canonicalising to an unrelated path', () => {
+    const findings = auditCrossPage(
+      snapshot([page('/blog/page/2', { canonical: 'https://example.com/pricing' })]),
+    );
+    expect(codes(findings)).toContain('canonical.crosspath');
+  });
+
   it('accepts a self-referencing canonical with a trailing slash', () => {
     const findings = auditCrossPage(
       snapshot([page('/services', { canonical: 'https://example.com/services/' })]),

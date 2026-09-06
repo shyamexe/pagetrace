@@ -34,6 +34,11 @@ export interface PageFingerprint {
 
 /** Site-wide signals that live outside any single page. */
 export interface SiteFingerprint {
+  /**
+   * The origin this snapshot was crawled from, e.g. "https://example.com".
+   * Absent for a filesystem crawl and for lockfiles written before 0.2.0.
+   */
+  origin?: string | null;
   robotsTxt: {
     present: boolean;
     /** agent name -> whether the root path is crawlable */
@@ -99,4 +104,9 @@ export interface Config {
   aiAgents?: string[];
   /** Minimum word count before a page is flagged as thin. */
   minWordCount?: number;
+  /**
+   * The site's own origin, e.g. "https://example.com". Lets a --dir crawl detect
+   * canonicals pointing at another host; an origin crawl infers it.
+   */
+  siteUrl?: string;
 }

@@ -107,6 +107,7 @@ Routes are discovered from `robots.txt` sitemap declarations, falling back to `/
 | `jsonld.entity.removed` | error | A structured data entity disappeared |
 | `jsonld.property.removed` | error | An entity lost a property it used to have |
 | `content.dropped` | error | Word count fell by more than half — usually a render failure |
+| `canonical.offsite` | error | A canonical points at a host other than your own |
 | `aeo.crawler.newly_blocked` | error | `robots.txt` started blocking an AI crawler |
 | `aeo.llmstxt.removed` | error | `/llms.txt` disappeared |
 | `page.removed` | warn | A route in the lockfile is no longer there |
@@ -121,6 +122,7 @@ Alongside the diff, `check` runs absolute rules: missing title, canonical, `h1`,
 
 ```json
 {
+  "siteUrl": "https://example.com",
   "ignoreRoutes": ["/preview/*", "/draft"],
   "minWordCount": 300,
   "severity": {
@@ -130,6 +132,8 @@ Alongside the diff, `check` runs absolute rules: missing title, canonical, `h1`,
   "aiAgents": ["GPTBot", "ClaudeBot", "MyCustomBot"]
 }
 ```
+
+`siteUrl` is only needed for a `--dir` crawl, and only to detect canonicals pointing at another host — a staging hostname leaking into production canonicals. A `--url` crawl infers it.
 
 Every finding has a stable `code`. Set any code to `error`, `warn`, `info`, or `off`.
 

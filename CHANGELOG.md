@@ -18,8 +18,25 @@ finding *messages* changed, which is deliberate — see Fixed.
   easier to remember, to document and to search for than two, and three-letter
   bins collide freely across packages.
 
+### Added
+
+- `canonical.offsite` (error): a canonical pointing at a host other than the
+  site's own. A staging or CDN hostname leaking into canonicals removes the live
+  site from results, and `canonical.crosspath` could not see it — that rule
+  compares paths only, so `/services` canonicalising to
+  `https://staging.example.net/services` looked correct. Checked only when the
+  site's own origin is known: an origin crawl records it, and a `--dir` crawl
+  takes it from the new `siteUrl` config option. Inferring it from the canonicals
+  themselves would miss the site-wide leak, which is the case that matters.
+- `siteUrl` config option, and `site.origin` on the snapshot.
+
 ### Changed
 
+- `canonical.crosspath` no longer fires on paginated archives (`/blog/page/2`,
+  `/blog/p/3`) or AMP variants (`/article/amp`, `/amp/guide`) whose canonical
+  points at the parent they are a variant of. Both are ordinary CMS output; the
+  rule flagged one per page and buried the real canonical mistakes. A paginated
+  page canonicalising somewhere unrelated is still flagged.
 - **Breaking.** `hreflang.missing` now fires only for a page that another
   annotated page names as an alternate, instead of for every unannotated page on
   a site that uses hreflang anywhere. The old rule produced a warning per page on
@@ -89,8 +106,6 @@ finding *messages* changed, which is deliberate — see Fixed.
   docstring always claimed. It was taking the first `<p>` anywhere in the
   document, so a cookie banner stood in for the lead — and edits to that banner
   showed up as content changes in the lockfile.
-
-### Added
 
 - `test/snapshot.test.ts` covers the crawl layer, which had no tests of its own:
   404-versus-failure, an unreachable origin, a server error mid-crawl, off-host

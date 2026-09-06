@@ -92,7 +92,11 @@ export async function snapshotFromDir(dir: string, config: Config = {}): Promise
   }
 
   const agents = config.aiAgents ?? DEFAULT_AI_AGENTS;
-  const site: SiteFingerprint = { robotsTxt: null, llmsTxt: null };
+  const site: SiteFingerprint = {
+    origin: config.siteUrl ? new URL(config.siteUrl).origin : null,
+    robotsTxt: null,
+    llmsTxt: null,
+  };
 
   const robots = await readFile(join(dir, 'robots.txt'), 'utf8').catch(() => null);
   if (robots !== null) site.robotsTxt = extractRobotsTxt(robots, agents);
@@ -123,7 +127,7 @@ export async function snapshotFromOrigin(
   const base = new URL(origin);
   const agents = options.aiAgents ?? DEFAULT_AI_AGENTS;
   const timeout = options.timeout;
-  const site: SiteFingerprint = { robotsTxt: null, llmsTxt: null };
+  const site: SiteFingerprint = { origin: base.origin, robotsTxt: null, llmsTxt: null };
   const limit = options.limit ?? 200;
 
   const robots = await fetchText(new URL('/robots.txt', base).href, timeout);

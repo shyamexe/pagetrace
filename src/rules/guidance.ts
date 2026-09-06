@@ -188,6 +188,14 @@ export const GUIDANCE: Record<string, Guidance> = {
       wordpress: 'A common symptom of a plugin canonicalising every archive page to the parent.',
     },
   },
+  'canonical.offsite': {
+    why: 'The canonical points at a different host, which tells search engines to index that host instead of this one. A staging or CDN hostname leaking into canonicals removes the live site from results.',
+    fix: 'Point canonicals at the production origin. If the content is deliberately syndicated from another domain, this is correct and the rule can be switched off in config.',
+    byPlatform: {
+      wordpress: 'Check the Site Address (URL) setting, and any WP_HOME or WP_SITEURL override in wp-config.php, on the environment that built this.',
+      nextjs: 'Check `metadataBase` — a wrong or missing value makes every relative canonical resolve against the wrong origin.',
+    },
+  },
   'canonical.crosspath': {
     why: 'The canonical points at a different path than the page itself, so this URL is asking not to be indexed in favour of another.',
     fix: 'Verify the target is correct. If this page should rank on its own, make the canonical self-referencing.',
