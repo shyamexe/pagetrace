@@ -67,3 +67,36 @@ jobs:
             echo "See CHANGELOG.md for details." > notes.md
           fi
           gh release create "$TAG" --title "$TAG" --notes-file notes.md
+
+  # GitHub Packages is a second registry, not a mirror: it takes scoped names
+  # only, so the same tarball ships there as @shyamexe/pagetrace. Split from the
+  # npmjs job because that one is the real release — a failure here must not
+  # take it down, and the rewritten name must never reach npmjs.
+  github-packages:
+    needs: publish
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          # Scoped, so `npm ci` still resolves everything else from npmjs.
+          registry-url: https://npm.pkg.github.com
+          scope: '@shyamexe'
+
+      - run: npm ci
+
+      # Provenance is an npmjs feature; GitHub Packages rejects the publish.
+      - name: Rewrite the name for GitHub Packages
+        run: |
+          npm pkg set name=@shyamexe/pagetrace
+          npm pkg delete publishConfig.provenance
+
+      # prepublishOnly runs typecheck, tests and build here too.
+      - run: npm publish
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
