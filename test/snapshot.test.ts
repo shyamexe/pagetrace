@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { auditCrossPage } from '../src/audit.js';
-import { sameSurface, snapshotFromGitRef, snapshotFromOrigin } from '../src/snapshot.js';
+import {
+  sameSurface,
+  snapshotFromDir,
+  snapshotFromGitRef,
+  snapshotFromOrigin,
+} from '../src/snapshot.js';
 
 const ORIGIN = 'https://example.com';
 
@@ -130,6 +135,51 @@ describe('siteUrl against a local build', () => {
     const snapshot = await snapshotFromOrigin('http://localhost:3000');
     expect(snapshot.site.origin).toBe('http://localhost:3000');
     expect(auditCrossPage(snapshot).some((f) => f.code === 'canonical.offsite')).toBe(true);
+  });
+});
+
+describe('broken internal links', () => {
+  const linking = (href: string) =>
+    `<html><head><title>A</title></head><body><a href="${href}">go</a></body></html>`;
+
+  it('reports a link to a page the build does not contain', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pagetrace-links-'));
+    writeFileSync(join(dir, 'index.html'), linking('/missing'));
+    writeFileSync(join(dir, 'about.html'), linking('/'));
+    const snapshot = await snapshotFromDir(dir);
+    expect(snapshot.pages['/'].brokenLinks).toEqual(['/missing']);
+    expect(snapshot.pages['/about'].brokenLinks).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('does not mistake an asset for a missing page', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pagetrace-links-'));
+    writeFileSync(join(dir, 'index.html'), linking('/logo.png'));
+    const snapshot = await snapshotFromDir(dir);
+    expect(snapshot.pages['/'].brokenLinks).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('confirms a candidate over the network before reporting it on a crawl', async () => {
+    // A sitemap routinely omits live pages, so absence from the crawl is not
+    // evidence. /live answers, /gone does not.
+    stubNetwork({
+      [`${ORIGIN}/sitemap.xml`]: `<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`,
+      [`${ORIGIN}/a`]: `<html><head><title>A</title></head><body><a href="/live">l</a><a href="/gone">g</a></body></html>`,
+      [`${ORIGIN}/live`]: html('Live'),
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.pages['/a'].brokenLinks).toEqual(['/gone']);
+  });
+
+  it('stays silent when the check itself could not reach the target', async () => {
+    stubNetwork({
+      [`${ORIGIN}/sitemap.xml`]: `<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`,
+      [`${ORIGIN}/a`]: `<html><head><title>A</title></head><body><a href="/flaky">f</a></body></html>`,
+      [`${ORIGIN}/flaky`]: new Error('ECONNRESET'),
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.pages['/a'].brokenLinks).toBeUndefined();
   });
 });
 

@@ -159,10 +159,13 @@ pagetrace update              # install it globally
 | `redirect.added` | warn | A route that used to answer directly now redirects |
 | `redirect.changed` | warn | A route redirects somewhere new |
 | `canonical.redirects` | warn | A canonical points at a URL that redirects |
+| `link.broken.added` | error | A page started linking to a URL that does not exist |
 | `sitemap.dead` | error | The sitemap lists a URL that answers 404 |
 | `sitemap.redirect` | warn | The sitemap lists a URL that redirects |
 | `og.removed` / `hreflang.removed` | warn | Social or i18n tags dropped |
 | `title.changed` | info | Ordinary copy edit |
+
+Internal links are checked too. Only the broken ones are stored, so a site's navigation never lands in the lockfile: `link.broken` for a link that is already dead, `link.broken.added` for one this build broke. A `--dir` crawl is authoritative — the build directory is the whole site — while a crawl confirms each candidate with a real request first, because a sitemap routinely omits pages that are live. External links are deliberately not checked: a Cloudflare 403 and a rate limit both look like a dead page, and that is where link checkers earn their reputation for false positives.
 
 Redirects are recorded from the response itself, so they cost no extra requests. A redirect that only adds or drops a trailing slash is server configuration rather than drift and is not reported. `canonical.redirects` is only raised when the canonical's target was actually crawled, so a `--limit` run cannot invent it.
 

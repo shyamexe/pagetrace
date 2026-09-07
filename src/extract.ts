@@ -280,6 +280,28 @@ export function isCrawlable(
   return longest(rules.allow) >= longest(rules.disallow);
 }
 
+/**
+ * Internal-looking hrefs on the page, deduplicated, in document order.
+ *
+ * Resolution happens in snapshot.ts, which is the only layer that knows the
+ * page's own URL and the full set of routes. Anything with a scheme is somebody
+ * else's problem: an external link checker fans out to hosts you do not
+ * control, where a Cloudflare 403 and a rate limit both look like a dead page.
+ */
+export function extractLinks(html: string): string[] {
+  const root = parse(html);
+  const hrefs = new Set<string>();
+  for (const anchor of root.querySelectorAll('a[href]')) {
+    const href = anchor.getAttribute('href')?.trim();
+    if (!href) continue;
+    // Fragments, mailto:, tel:, javascript:, protocol-relative and absolute
+    // URLs. A bare "#" section link is the same page by definition.
+    if (href.startsWith('#') || href.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
+    hrefs.add(href);
+  }
+  return [...hrefs];
+}
+
 /** Parse llms.txt, capturing section headings so truncation is detectable. */
 export function extractLlmsTxt(body: string) {
   const sections = body

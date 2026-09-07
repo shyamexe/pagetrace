@@ -2,6 +2,7 @@ export { auditCrossPage, auditHreflang, auditPage, auditSite, auditSnapshot } fr
 export { diffPage, diffSite, diffSnapshots } from './diff.js';
 export {
   extractJsonLd,
+  extractLinks,
   extractLlmsTxt,
   extractPage,
   extractRobotsTxt,

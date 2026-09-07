@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { auditCrossPage, auditSite } from '../src/audit.js';
+import { auditCrossPage, auditSite, auditSnapshot } from '../src/audit.js';
 import { detectPlatform, withGuidance, GUIDANCE } from '../src/rules/guidance.js';
 import { aggregate, formatAuditHtml, formatAuditMarkdown, formatAuditPretty, formatSarif } from '../src/report.js';
 import type { Aggregate, Finding, PageFingerprint, Snapshot } from '../src/types.js';
@@ -407,5 +407,22 @@ describe('formatSarif', () => {
     const sarif = JSON.parse(formatSarif(findings));
     const ids = sarif.runs[0].tool.driver.rules.map((r: { id: string }) => r.id);
     expect(ids).toEqual(['canonical.removed', 'title.long', 'robotstxt.missing']);
+  });
+});
+
+describe('link.broken', () => {
+  it('names the target so aggregation groups every page that carries the same dead link', () => {
+    const findings = auditSnapshot(
+      snapshot([
+        page('/', { brokenLinks: ['/pricing-old'] }),
+        page('/about', { brokenLinks: ['/pricing-old'] }),
+      ]),
+    ).filter((f) => f.code === 'link.broken');
+
+    expect(findings.map((f) => f.route)).toEqual(['/', '/about']);
+    const groups = aggregate(findings);
+    expect(groups).toHaveLength(1);
+    expect(groups[0].message).toBe('Links to /pricing-old, which does not exist.');
+    expect(groups[0].routes).toEqual(['/', '/about']);
   });
 });

@@ -35,6 +35,14 @@ export const GUIDANCE: Record<string, Guidance> = {
       nextjs: 'Add `description` to the route\'s exported `metadata` object.',
     },
   },
+  'link.broken': {
+    why: 'A link to a page that does not exist wastes the crawl that follows it, drops the ranking signal the link was passing, and sends readers to a 404. Internal links are entirely within your control, so a broken one is a defect rather than a fact about the web.',
+    fix: 'Point the link at the current URL, or restore the page. If the target moved, redirect the old URL and update the link to the destination.',
+    byPlatform: {
+      wordpress: 'Usually a permalink or slug edit with the old URL still hard-coded in post content or a menu. Check Appearance > Menus as well as the posts themselves.',
+      nextjs: 'A `<Link href>` pointing at a route that no longer exists. TypeScript will not catch it — typed routes are opt-in via `experimental.typedRoutes`.',
+    },
+  },
   'sitemap.dead': {
     why: 'A sitemap is a list of URLs you are asking to have crawled. Entries that 404 spend crawl budget on nothing and lower the trust placed in the rest of the file.',
     fix: 'Remove the URL from the sitemap, or restore the page. If it moved, redirect it and list the destination instead.',

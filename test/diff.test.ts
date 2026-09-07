@@ -66,6 +66,28 @@ describe('diffPage', () => {
     expect(diffPage(legacy as PageFingerprint, page({ redirectsTo: null }))).toEqual([]);
   });
 
+  it('fails on a link that broke this build, and names it', () => {
+    const findings = diffPage(page(), page({ brokenLinks: ['/pricing-old'] }));
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: 'link.broken.added',
+        severity: 'error',
+        message: 'Links to /pricing-old, which does not exist.',
+      }),
+    ]);
+  });
+
+  it('says nothing about a link that was already broken', () => {
+    // The audit reports standing breakage. Repeating it here would fail CI for
+    // a problem this build did not introduce.
+    expect(diffPage(page({ brokenLinks: ['/old'] }), page({ brokenLinks: ['/old'] }))).toEqual([]);
+  });
+
+  it('notes a repaired link as information, not a problem', () => {
+    const findings = diffPage(page({ brokenLinks: ['/old'] }), page());
+    expect(findings[0]).toMatchObject({ code: 'link.broken.removed', severity: 'info' });
+  });
+
   it('treats a lost canonical as an error and a changed one as a warning', () => {
     expect(diffPage(page(), page({ canonical: null }))[0]).toMatchObject({
       code: 'canonical.removed',

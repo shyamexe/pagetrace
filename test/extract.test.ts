@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { extractJsonLd, extractLlmsTxt, extractPage, extractRobotsTxt, extractSitemapUrls, isCrawlable } from '../src/extract.js';
+import { extractJsonLd, extractLinks, extractLlmsTxt, extractPage, extractRobotsTxt, extractSitemapUrls, isCrawlable } from '../src/extract.js';
 import { parse } from 'node-html-parser';
 
 const page = `
@@ -233,5 +233,23 @@ describe('isCrawlable', () => {
 
   it('treats an absent robots.txt as fully crawlable', () => {
     expect(isCrawlable('/anything', null)).toBe(true);
+  });
+});
+
+describe('extractLinks', () => {
+  it('keeps internal hrefs and drops what is not a page on this site', () => {
+    const html = `<html><body>
+      <a href="/about">About</a>
+      <a href="contact">Contact</a>
+      <a href="/about">About again</a>
+      <a href="#section">Jump</a>
+      <a href="mailto:hi@example.com">Mail</a>
+      <a href="tel:+15551234">Call</a>
+      <a href="javascript:void(0)">Nothing</a>
+      <a href="https://example.org/page">External</a>
+      <a href="//cdn.example.org/page">Protocol relative</a>
+      <a>No href</a>
+    </body></html>`;
+    expect(extractLinks(html)).toEqual(['/about', 'contact']);
   });
 });

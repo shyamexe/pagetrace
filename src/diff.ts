@@ -128,6 +128,20 @@ export function diffPage(before: PageFingerprint, after: PageFingerprint): Findi
       push(`${group}.removed`, 'warn', `${label} tags were removed.`, { before: dropped });
   }
 
+  // A link that breaks between deploys is the regression; one that was already
+  // broken is the audit's business, and repeating it here would fail CI for a
+  // problem this build did not introduce.
+  const brokenBefore = before.brokenLinks ?? [];
+  const brokenAfter = after.brokenLinks ?? [];
+  for (const target of brokenAfter.filter((t) => !brokenBefore.includes(t)))
+    push('link.broken.added', 'error', `Links to ${target}, which does not exist.`, {
+      after: target,
+    });
+  for (const target of brokenBefore.filter((t) => !brokenAfter.includes(t)))
+    push('link.broken.removed', 'info', `Link to ${target} was fixed or removed.`, {
+      before: target,
+    });
+
   const droppedHreflang = Object.keys(before.hreflang).filter((k) => !(k in after.hreflang));
   if (droppedHreflang.length > 0)
     push('hreflang.removed', 'warn', 'hreflang alternates were removed.', {

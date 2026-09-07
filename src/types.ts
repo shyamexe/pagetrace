@@ -40,6 +40,13 @@ export interface PageFingerprint {
    * route and is not recorded — that is server configuration, not drift.
    */
   redirectsTo?: string | null;
+  /**
+   * Internal links from this page that do not resolve to a page. Only the
+   * broken ones are kept: storing every link would put a site's whole
+   * navigation into the lockfile and make its diff unreadable, which is the one
+   * property the lockfile has to have.
+   */
+  brokenLinks?: string[];
 }
 
 /** Site-wide signals that live outside any single page. */

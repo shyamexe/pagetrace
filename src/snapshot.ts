@@ -3,6 +3,7 @@ import { readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 import {
+  extractLinks,
   extractLlmsTxt,
   extractPage,
   extractRobotsTxt,
@@ -168,6 +169,7 @@ function tryFetchText(url: string, timeoutMs?: number): Promise<string | null> {
 export async function snapshotFromDir(dir: string, config: Config = {}): Promise<Snapshot> {
   const files = await walkHtml(dir);
   const pages: Record<string, PageFingerprint> = {};
+  const links: Record<string, string[]> = {};
 
   for (const file of files.sort()) {
     const route = routeFromFilePath(dir, file);
@@ -178,7 +180,9 @@ export async function snapshotFromDir(dir: string, config: Config = {}): Promise
       console.error(`pagetrace: ${file} maps to ${route}, already taken. Skipping.`);
       continue;
     }
-    pages[route] = extractPage(await readFile(file, 'utf8'), route);
+    const html = await readFile(file, 'utf8');
+    pages[route] = extractPage(html, route);
+    links[route] = extractLinks(html);
   }
 
   const agents = config.aiAgents ?? DEFAULT_AI_AGENTS;
@@ -195,7 +199,87 @@ export async function snapshotFromDir(dir: string, config: Config = {}): Promise
   const llms = await readFile(join(dir, 'llms.txt'), 'utf8').catch(() => null);
   if (llms !== null) site.llmsTxt = extractLlmsTxt(llms);
 
+  // A build directory is the whole site, so a link resolving to no file here is
+  // broken, with nothing to confirm over the network.
+  await resolveBrokenLinks(pages, links, site.origin ?? 'https://pagetrace.invalid');
+
   return { schemaVersion: 1, createdAt: new Date().toISOString(), site, pages };
+}
+
+/**
+ * A link target is only a candidate for being broken if it is meant to be a
+ * page at all. A trailing `.png` or `.pdf` is an asset the crawl never
+ * fingerprints, and reporting those would bury the real breakage.
+ *
+ * ponytail: an extension test, not a content-type check. Extensionless asset
+ * routes will be treated as pages; verify them if a real site trips on it.
+ */
+const ASSET_PATH = /\.(?!html?$)[a-z0-9]+$/i;
+
+/**
+ * Resolve an href against the page it appeared on. Null means "not a page here".
+ *
+ * Relative hrefs are resolved as though every route were a directory, which is
+ * what static output (`/blog/index.html`, served at `/blog/`) actually does.
+ * A site serving `/blog` without the trailing slash resolves `contact` to
+ * `/contact` instead — rare enough, and absolute hrefs are unaffected.
+ */
+function linkTarget(href: string, from: string, origin: string): string | null {
+  let url: URL;
+  try {
+    url = new URL(href, `${origin}${from === '/' ? '' : from}/`);
+  } catch {
+    return null;
+  }
+  if (url.origin !== origin) return null;
+  if (ASSET_PATH.test(url.pathname)) return null;
+  return routeFromUrl(url.href);
+}
+
+/**
+ * Links that point at no page in this snapshot. `verify` exists because absence
+ * only proves breakage when the route set is complete: a directory of built
+ * HTML is complete by construction, while a sitemap crawl routinely misses
+ * pages that are live but unlisted, so those candidates are confirmed with a
+ * real request before being reported.
+ *
+ * ponytail: verification is capped, so a site with hundreds of unlisted pages
+ * reports only the first MAX_LINK_CHECKS. Raise it if that bites.
+ */
+const MAX_LINK_CHECKS = 100;
+
+async function resolveBrokenLinks(
+  pages: Record<string, PageFingerprint>,
+  links: Record<string, string[]>,
+  origin: string,
+  verify?: (route: string) => Promise<boolean>,
+): Promise<void> {
+  const known = new Set(Object.keys(pages));
+  const candidates = new Map<string, string[]>();
+
+  for (const [route, hrefs] of Object.entries(links)) {
+    const missing = [
+      ...new Set(
+        hrefs
+          .map((href) => linkTarget(href, route, origin))
+          .filter((target): target is string => target !== null && !known.has(target)),
+      ),
+    ];
+    if (missing.length > 0) candidates.set(route, missing);
+  }
+
+  const broken = new Set<string>();
+  if (verify) {
+    const targets = [...new Set([...candidates.values()].flat())].slice(0, MAX_LINK_CHECKS);
+    for (const target of targets) {
+      if (await verify(target)) broken.add(target);
+    }
+  }
+
+  for (const [route, missing] of candidates) {
+    const confirmed = verify ? missing.filter((target) => broken.has(target)) : missing;
+    if (confirmed.length > 0) pages[route].brokenLinks = confirmed.sort();
+  }
 }
 
 export interface CrawlOptions extends Config {
@@ -308,6 +392,7 @@ export async function snapshotFromOrigin(
   const targets = crawlable.slice(0, limit);
 
   const pages: Record<string, PageFingerprint> = {};
+  const links: Record<string, string[]> = {};
   const concurrency = Math.max(1, options.concurrency ?? 5);
   const queue = [...targets];
 
@@ -328,6 +413,7 @@ export async function snapshotFromOrigin(
         // The fingerprint therefore describes the destination's HTML, so a new
         // redirect also reports the title and canonical it now resolves to.
         const page = extractPage(doc.text, route);
+        links[route] = extractLinks(doc.text);
         // An empty response.url means the client did not tell us where the body
         // came from, which is no evidence of a redirect — never a redirect to "".
         const landed = !doc.url
@@ -340,6 +426,18 @@ export async function snapshotFromOrigin(
       }
     }),
   );
+
+  // A sitemap is not a site map: pages that are live but unlisted are ordinary,
+  // so every candidate is confirmed with a real request before it is reported.
+  await resolveBrokenLinks(pages, links, base.origin, async (route) => {
+    try {
+      return (await fetchDoc(new URL(route, base).href, timeout)) === null;
+    } catch {
+      // Unreachable is not the same as absent, and a flaky response must not
+      // become a finding about the site's links.
+      return false;
+    }
+  });
 
   return { schemaVersion: 1, createdAt: new Date().toISOString(), site, pages };
 }

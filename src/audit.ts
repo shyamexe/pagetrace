@@ -92,6 +92,23 @@ export function auditPage(page: PageFingerprint, config: Config = {}): Finding[]
   return findings;
 }
 
+/**
+ * One finding per broken target, with the target in the message. Aggregation
+ * groups by code *and* message, so a dead link in a site-wide nav collapses to
+ * a single row that names the URL and lists every page carrying it — the same
+ * reason the duplicate rules put their key in the message. A constant message
+ * would report "a URL does not exist" and leave you to find which.
+ */
+function auditLinks(page: PageFingerprint): Finding[] {
+  return (page.brokenLinks ?? []).map((target) => ({
+    code: 'link.broken',
+    severity: 'error' as const,
+    route: page.route,
+    message: `Links to ${target}, which does not exist.`,
+    after: target,
+  }));
+}
+
 export function auditSite(snapshot: Snapshot): Finding[] {
   const findings: Finding[] = [];
   const { site } = snapshot;
@@ -441,6 +458,9 @@ export function auditSnapshot(snapshot: Snapshot, config: Config = {}): Finding[
     ...auditSite(snapshot),
     ...auditCrossPage(snapshot),
     ...auditHreflang(snapshot),
-    ...Object.values(snapshot.pages).flatMap((page) => auditPage(page, config)),
+    ...Object.values(snapshot.pages).flatMap((page) => [
+      ...auditPage(page, config),
+      ...auditLinks(page),
+    ]),
   ];
 }

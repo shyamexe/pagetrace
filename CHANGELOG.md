@@ -10,6 +10,14 @@ While the version is below 1.0.0, breaking changes ship in a minor release.
 
 ### Added
 
+- Internal link integrity. `link.broken` (error) for a link pointing at no page,
+  and `link.broken.added` for one this build broke — the diff stays quiet about
+  breakage it did not introduce, so CI fails on the regression rather than on
+  the backlog. Only broken links are stored, keeping a site's navigation out of
+  the lockfile and its diff readable. A `--dir` crawl is authoritative; an
+  origin crawl confirms each candidate with a real request, because a sitemap
+  routinely omits pages that are live. External links are not checked.
+
 - Redirect drift. A crawl now records where each route actually landed, taken
   from the response itself at no extra request. `redirect.added` and
   `redirect.changed` (warn) and `redirect.removed` (info) report a route that
