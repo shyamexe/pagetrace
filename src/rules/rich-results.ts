@@ -89,6 +89,60 @@ export const RICH_RESULT_RULES: Record<string, RichResultRule> = {
     required: ['name', 'url'],
     recommended: ['potentialAction'],
   },
+  Book: {
+    required: ['name', 'author'],
+    recommended: ['url', 'workExample', 'isbn', 'sameAs'],
+  },
+  Dataset: {
+    required: ['name', 'description'],
+    recommended: ['creator', 'license', 'identifier', 'distribution', 'temporalCoverage'],
+  },
+  QAPage: {
+    required: ['mainEntity'],
+    recommended: [],
+  },
+  Question: {
+    required: ['name'],
+    recommended: ['answerCount', 'author', 'datePublished', 'upvoteCount'],
+    oneOf: [['acceptedAnswer', 'suggestedAnswer']],
+  },
+  Answer: {
+    required: ['text'],
+    recommended: ['url', 'author', 'datePublished', 'upvoteCount'],
+  },
+  ClaimReview: {
+    required: ['claimReviewed', 'reviewRating', 'url'],
+    recommended: ['author', 'datePublished', 'itemReviewed'],
+  },
+  Movie: {
+    required: ['name'],
+    recommended: ['image', 'dateCreated', 'director', 'aggregateRating', 'review'],
+  },
+  ProfilePage: {
+    required: ['mainEntity'],
+    recommended: ['dateCreated', 'dateModified'],
+  },
+  DiscussionForumPosting: {
+    required: ['headline', 'author', 'datePublished'],
+    recommended: ['text', 'image', 'url', 'interactionStatistic'],
+  },
+  ImageObject: {
+    required: ['contentUrl'],
+    recommended: ['creator', 'creditText', 'copyrightNotice', 'license', 'acquireLicensePage'],
+  },
+  SpecialAnnouncement: {
+    required: ['name', 'text', 'datePosted'],
+    recommended: ['expires', 'category', 'announcementLocation', 'spatialCoverage'],
+  },
+  EmployerAggregateRating: {
+    required: ['itemReviewed', 'ratingValue'],
+    recommended: ['bestRating', 'worstRating'],
+    oneOf: [['ratingCount', 'reviewCount']],
+  },
+  PodcastSeries: {
+    required: ['name', 'webFeed'],
+    recommended: ['description', 'image', 'author'],
+  },
   Person: {
     required: ['name'],
     recommended: ['url', 'jobTitle', 'sameAs', 'image'],

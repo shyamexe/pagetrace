@@ -193,8 +193,9 @@ export function extractPage(html: string, route: string): PageFingerprint {
 /** Parse robots.txt into per-agent crawlability of the site root. */
 export function extractRobotsTxt(body: string, agents: string[]) {
   const sitemaps: string[] = [];
-  const groups: { agents: string[]; disallowAll: boolean }[] = [];
-  let current: { agents: string[]; disallowAll: boolean } | null = null;
+  type Group = { agents: string[]; disallowAll: boolean; disallow: string[]; allow: string[] };
+  const groups: Group[] = [];
+  let current: Group | null = null;
   let lastWasAgent = false;
 
   for (const rawLine of body.split(/\r?\n/)) {
@@ -211,7 +212,7 @@ export function extractRobotsTxt(body: string, agents: string[]) {
     }
     if (field === 'user-agent') {
       if (!current || !lastWasAgent) {
-        current = { agents: [], disallowAll: false };
+        current = { agents: [], disallowAll: false, disallow: [], allow: [] };
         groups.push(current);
       }
       current.agents.push(value.toLowerCase());
@@ -219,9 +220,19 @@ export function extractRobotsTxt(body: string, agents: string[]) {
       continue;
     }
     lastWasAgent = false;
-    if (field === 'disallow' && current && value === '/') current.disallowAll = true;
-    if (field === 'allow' && current && value === '/') current.disallowAll = false;
+    if (field === 'disallow' && current) {
+      if (value === '/') current.disallowAll = true;
+      if (value !== '') current.disallow.push(value);
+    }
+    if (field === 'allow' && current) {
+      if (value === '/') current.disallowAll = false;
+      current.allow.push(value);
+    }
   }
+
+  // The rules a plain crawler obeys: its own group if robots.txt names it,
+  // otherwise the wildcard group.
+  const ours = groups.find((g) => g.agents.includes('pagetrace')) ?? groups.find((g) => g.agents.includes('*'));
 
   const aiAgents: Record<string, 'allowed' | 'disallowed'> = {};
   for (const agent of agents) {
@@ -232,7 +243,41 @@ export function extractRobotsTxt(body: string, agents: string[]) {
     aiAgents[agent] = group?.disallowAll ? 'disallowed' : 'allowed';
   }
 
-  return { present: true, aiAgents, sitemaps };
+  return {
+    present: true,
+    aiAgents,
+    sitemaps,
+    disallow: ours?.disallow ?? [],
+    allow: ours?.allow ?? [],
+  };
+}
+
+/**
+ * robots.txt path matching: `*` stands for any run of characters and a trailing
+ * `$` anchors the end. Everything else is a literal prefix.
+ */
+function robotsPattern(rule: string): RegExp {
+  const anchored = rule.endsWith('$');
+  const body = anchored ? rule.slice(0, -1) : rule;
+  const escaped = body.replace(/[.+?^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*');
+  return new RegExp(`^${escaped}${anchored ? '$' : ''}`);
+}
+
+/**
+ * Whether a path may be crawled. The longest matching rule wins, and Allow wins
+ * a tie — the behaviour Google and the RFC both specify, and the reason
+ * `Disallow: /` with `Allow: /blog` is a crawlable blog rather than a dead site.
+ */
+export function isCrawlable(
+  path: string,
+  rules: { disallow?: string[]; allow?: string[] } | null | undefined,
+): boolean {
+  if (!rules) return true;
+  const longest = (patterns: string[] = []) =>
+    patterns
+      .filter((rule) => rule !== '' && robotsPattern(rule).test(path))
+      .reduce((max, rule) => Math.max(max, rule.length), -1);
+  return longest(rules.allow) >= longest(rules.disallow);
 }
 
 /** Parse llms.txt, capturing section headings so truncation is detectable. */

@@ -1,11 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import {
-  extractJsonLd,
-  extractLlmsTxt,
-  extractPage,
-  extractRobotsTxt,
-  extractSitemapUrls,
-} from '../src/extract.js';
+import { extractJsonLd, extractLlmsTxt, extractPage, extractRobotsTxt, extractSitemapUrls, isCrawlable } from '../src/extract.js';
 import { parse } from 'node-html-parser';
 
 const page = `
@@ -206,5 +200,38 @@ describe('extractSitemapUrls', () => {
     const xml = `<urlset><url><loc>https://a.test/</loc></url><url><loc>
       https://a.test/b </loc></url></urlset>`;
     expect(extractSitemapUrls(xml)).toEqual(['https://a.test/', 'https://a.test/b']);
+  });
+});
+
+describe('isCrawlable', () => {
+  const parse = (body: string) => extractRobotsTxt(body, []);
+
+  it('blocks a disallowed prefix and allows everything else', () => {
+    const rules = parse('User-agent: *\nDisallow: /admin');
+    expect(isCrawlable('/admin/users', rules)).toBe(false);
+    expect(isCrawlable('/blog', rules)).toBe(true);
+  });
+
+  it('lets the longest rule win, so an Allow carves out of a blanket Disallow', () => {
+    // Without longest-match, `Disallow: /` on a staging-style robots.txt would
+    // swallow the exception and the crawl would return nothing.
+    const rules = parse('User-agent: *\nDisallow: /\nAllow: /blog');
+    expect(isCrawlable('/blog/post', rules)).toBe(true);
+    expect(isCrawlable('/private', rules)).toBe(false);
+  });
+
+  it('honours * and a trailing $', () => {
+    const rules = parse('User-agent: *\nDisallow: /*.pdf$');
+    expect(isCrawlable('/files/report.pdf', rules)).toBe(false);
+    expect(isCrawlable('/files/report.pdf.html', rules)).toBe(true);
+  });
+
+  it('prefers a group naming pagetrace over the wildcard group', () => {
+    const rules = parse('User-agent: *\nDisallow: /\n\nUser-agent: pagetrace\nDisallow:');
+    expect(isCrawlable('/anything', rules)).toBe(true);
+  });
+
+  it('treats an absent robots.txt as fully crawlable', () => {
+    expect(isCrawlable('/anything', null)).toBe(true);
   });
 });

@@ -121,6 +121,29 @@ export function auditSite(snapshot: Snapshot): Finding[] {
     }
   }
 
+  // Only an origin crawl has a sitemap to be right or wrong about. Every route
+  // here was fetched, so neither rule can fire on a page --limit never reached.
+  if (site.sitemap) {
+    for (const route of site.sitemap.dead) {
+      findings.push({
+        code: 'sitemap.dead',
+        severity: 'error',
+        route,
+        message: 'Sitemap lists a URL that answers 404.',
+      });
+    }
+    for (const page of Object.values(snapshot.pages)) {
+      if (!page.redirectsTo) continue;
+      findings.push({
+        code: 'sitemap.redirect',
+        severity: 'warn',
+        route: page.route,
+        message: 'Sitemap lists a URL that redirects.',
+        after: page.redirectsTo,
+      });
+    }
+  }
+
   if (!site.llmsTxt?.present) {
     findings.push({
       code: 'aeo.llmstxt.missing',
@@ -226,6 +249,29 @@ export function auditCrossPage(snapshot: Snapshot): Finding[] {
   duplicates('duplicate.canonical', 'error', group((p) => p.canonical), (canonical, n) =>
     `${n} pages canonicalise to ${canonical}.`,
   );
+
+  /**
+   * A canonical naming a URL that redirects is a canonical the engine is free
+   * to ignore, because the URL it names is not the URL that serves the page.
+   *
+   * Only checked against routes this crawl actually fetched: under `--limit`,
+   * a canonical target we never requested proves nothing about whether it
+   * redirects.
+   */
+  for (const page of pages) {
+    if (!page.canonical) continue;
+    const target = pathOf(page.canonical);
+    if (target === null || target === page.route) continue;
+    const destination = snapshot.pages[target]?.redirectsTo;
+    if (!destination) continue;
+    findings.push({
+      code: 'canonical.redirects',
+      severity: 'warn',
+      route: page.route,
+      message: 'Canonical points at a URL that redirects.',
+      after: [target, destination],
+    });
+  }
 
   // Only checked when we know what the site's own host is: an origin crawl
   // records it, a --dir crawl needs config.siteUrl. Guessing it from the

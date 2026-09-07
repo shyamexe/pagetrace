@@ -29,7 +29,74 @@ function stubNetwork(routes: Record<string, string | Error | null>) {
   return calls;
 }
 
+/**
+ * Same as stubNetwork, but each route may answer from a different final URL,
+ * the way fetch reports a followed redirect. `response.url` is a prototype
+ * getter, so the instance shadows it.
+ */
+function stubRedirects(routes: Record<string, { body: string; from?: string }>) {
+  vi.stubGlobal('fetch', async (url: string) => {
+    const hit = routes[url];
+    if (!hit) return new Response('nope', { status: 404 });
+    const response = new Response(hit.body, { status: 200 });
+    Object.defineProperty(response, 'url', { value: hit.from ?? url });
+    return response;
+  });
+}
+
 afterEach(() => vi.unstubAllGlobals());
+
+describe('redirects', () => {
+  const sitemap = `<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`;
+
+  it('records where a route landed, keyed by the route asked for', async () => {
+    stubRedirects({
+      [`${ORIGIN}/sitemap.xml`]: { body: sitemap },
+      [`${ORIGIN}/a`]: { body: html('B'), from: `${ORIGIN}/b` },
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(Object.keys(snapshot.pages)).toEqual(['/a']);
+    expect(snapshot.pages['/a'].redirectsTo).toBe('/b');
+  });
+
+  it('leaves a direct answer with no redirect at all', async () => {
+    stubRedirects({
+      [`${ORIGIN}/sitemap.xml`]: { body: sitemap },
+      [`${ORIGIN}/a`]: { body: html('A') },
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.pages['/a'].redirectsTo).toBeNull();
+  });
+
+  it('ignores a trailing-slash redirect, which is configuration rather than drift', async () => {
+    stubRedirects({
+      [`${ORIGIN}/sitemap.xml`]: { body: sitemap },
+      [`${ORIGIN}/a`]: { body: html('A'), from: `${ORIGIN}/a/` },
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.pages['/a'].redirectsTo).toBeNull();
+  });
+
+  it('keeps the absolute URL when the redirect leaves the site', async () => {
+    stubRedirects({
+      [`${ORIGIN}/sitemap.xml`]: { body: sitemap },
+      [`${ORIGIN}/a`]: { body: html('A'), from: 'https://elsewhere.test/a' },
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.pages['/a'].redirectsTo).toBe('https://elsewhere.test/a');
+  });
+
+  it('records no redirect when the client does not report a final URL', async () => {
+    // A synthesised Response has an empty `url`. That is missing information,
+    // not a redirect to "" — which the diff would report on every page.
+    stubNetwork({
+      [`${ORIGIN}/sitemap.xml`]: sitemap,
+      [`${ORIGIN}/a`]: html('A'),
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.pages['/a'].redirectsTo).toBeNull();
+  });
+});
 
 describe('siteUrl against a local build', () => {
   it('compares canonicals to the configured site, not the crawl URL', async () => {
@@ -63,6 +130,45 @@ describe('siteUrl against a local build', () => {
     const snapshot = await snapshotFromOrigin('http://localhost:3000');
     expect(snapshot.site.origin).toBe('http://localhost:3000');
     expect(auditCrossPage(snapshot).some((f) => f.code === 'canonical.offsite')).toBe(true);
+  });
+});
+
+describe('robots.txt during a crawl', () => {
+  const routes = {
+    [`${ORIGIN}/robots.txt`]: 'User-agent: *\nDisallow: /admin',
+    [`${ORIGIN}/sitemap.xml`]: `<urlset><url><loc>${ORIGIN}/a</loc></url><url><loc>${ORIGIN}/admin/secret</loc></url></urlset>`,
+    [`${ORIGIN}/a`]: html('A'),
+    [`${ORIGIN}/admin/secret`]: html('Secret'),
+  };
+
+  it('skips a path robots.txt disallows', async () => {
+    stubNetwork(routes);
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(Object.keys(snapshot.pages)).toEqual(['/a']);
+  });
+
+  it('crawls it anyway with ignoreRobots, for a site you own', async () => {
+    stubNetwork(routes);
+    const snapshot = await snapshotFromOrigin(ORIGIN, { ignoreRobots: true });
+    expect(Object.keys(snapshot.pages).sort()).toEqual(['/a', '/admin/secret']);
+  });
+});
+
+describe('sitemap health', () => {
+  it('records a sitemap entry that answers 404 without failing the crawl', async () => {
+    stubNetwork({
+      [`${ORIGIN}/sitemap.xml`]: `<urlset><url><loc>${ORIGIN}/a</loc></url><url><loc>${ORIGIN}/gone</loc></url></urlset>`,
+      [`${ORIGIN}/a`]: html('A'),
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.site.sitemap?.dead).toEqual(['/gone']);
+    expect(snapshot.site.sitemap?.routes).toEqual(['/a', '/gone']);
+  });
+
+  it('records no sitemap at all when there was none to read', async () => {
+    stubNetwork({ [`${ORIGIN}/`]: html('Home') });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.site.sitemap).toBeUndefined();
   });
 });
 

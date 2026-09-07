@@ -41,6 +41,31 @@ describe('diffPage', () => {
     expect(removed[0].severity).toBe('error');
   });
 
+  it('reports a route that starts redirecting, and where it lands', () => {
+    const findings = diffPage(page(), page({ redirectsTo: '/gold-rate' }));
+    expect(findings).toEqual([
+      expect.objectContaining({
+        code: 'redirect.added',
+        severity: 'warn',
+        route: '/gold',
+        after: '/gold-rate',
+      }),
+    ]);
+  });
+
+  it('separates a redirect that moved from one that went away', () => {
+    const moved = diffPage(page({ redirectsTo: '/a' }), page({ redirectsTo: '/b' }));
+    expect(moved[0]).toMatchObject({ code: 'redirect.changed', severity: 'warn', before: '/a' });
+
+    const gone = diffPage(page({ redirectsTo: '/a' }), page());
+    expect(gone[0]).toMatchObject({ code: 'redirect.removed', severity: 'info' });
+  });
+
+  it('does not read a lockfile written before redirects were recorded as a change', () => {
+    const { redirectsTo: _omitted, ...legacy } = page({ redirectsTo: null });
+    expect(diffPage(legacy as PageFingerprint, page({ redirectsTo: null }))).toEqual([]);
+  });
+
   it('treats a lost canonical as an error and a changed one as a warning', () => {
     expect(diffPage(page(), page({ canonical: null }))[0]).toMatchObject({
       code: 'canonical.removed',

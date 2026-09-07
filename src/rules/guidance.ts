@@ -35,6 +35,25 @@ export const GUIDANCE: Record<string, Guidance> = {
       nextjs: 'Add `description` to the route\'s exported `metadata` object.',
     },
   },
+  'sitemap.dead': {
+    why: 'A sitemap is a list of URLs you are asking to have crawled. Entries that 404 spend crawl budget on nothing and lower the trust placed in the rest of the file.',
+    fix: 'Remove the URL from the sitemap, or restore the page. If it moved, redirect it and list the destination instead.',
+    byPlatform: {
+      wordpress: 'Usually a deleted post still cached in the SEO plugin\'s sitemap. Re-save permalinks, or clear the Yoast / Rank Math sitemap cache.',
+    },
+  },
+  'sitemap.redirect': {
+    why: 'A sitemap should list the URL you want indexed, not one that bounces to it. Every redirected entry is a wasted fetch and an ambiguous signal about which URL is canonical.',
+    fix: 'List the destination URL directly in the sitemap.',
+  },
+  'canonical.redirects': {
+    why: 'A canonical is a claim about which URL should rank. Pointing it at a URL that redirects contradicts itself, so the engine falls back to picking a canonical on its own — usually not the one you wanted.',
+    fix: 'Point the canonical at the URL that answers with 200 directly, which is normally the redirect destination.',
+    byPlatform: {
+      wordpress: 'Usually a permalink change with the old slug still in the SEO plugin\'s canonical field. Clear the manual canonical so Yoast or Rank Math emits the current permalink.',
+      nextjs: 'Check `alternates.canonical` against the redirects in next.config.js — a canonical is often left pointing at the source of a redirect rule.',
+    },
+  },
   'canonical.missing': {
     why: 'Without a canonical, duplicate URLs (query strings, pagination, tracking parameters, trailing-slash variants) compete against each other and split ranking signals.',
     fix: 'Emit a self-referencing canonical link on every indexable page.',

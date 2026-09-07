@@ -30,6 +30,16 @@ export interface PageFingerprint {
   leadAnswerWords: number;
   /** Content of <meta name="generator">, used for platform detection. */
   generator: string | null;
+  /**
+   * Where the route ended up after redirects, when that differs from the route
+   * asked for: a path for a same-origin redirect, an absolute URL for one that
+   * leaves the site. Null for a direct 200, and absent for a filesystem crawl
+   * and for lockfiles written before 0.10.0.
+   *
+   * A redirect that only adds or drops a trailing slash normalises to the same
+   * route and is not recorded — that is server configuration, not drift.
+   */
+  redirectsTo?: string | null;
 }
 
 /** Site-wide signals that live outside any single page. */
@@ -44,6 +54,22 @@ export interface SiteFingerprint {
     /** agent name -> whether the root path is crawlable */
     aiAgents: Record<string, 'allowed' | 'disallowed'>;
     sitemaps: string[];
+    /**
+     * Path rules that apply to a generic crawler, in the order written.
+     * Absent for lockfiles written before 0.10.0.
+     */
+    disallow?: string[];
+    allow?: string[];
+  } | null;
+  /**
+   * What the sitemap claimed, and what answering those URLs actually did.
+   * Null for a filesystem crawl, which has no sitemap to check against.
+   */
+  sitemap?: {
+    /** Same-origin routes the sitemap listed, before --limit truncated them. */
+    routes: string[];
+    /** Of those we fetched, the ones that answered 404 or 410. */
+    dead: string[];
   } | null;
   llmsTxt: {
     present: boolean;
@@ -111,4 +137,10 @@ export interface Config {
    * URL being crawled, since those serve production canonicals.
    */
   siteUrl?: string;
+  /**
+   * Crawl paths that robots.txt disallows. Off by default: a staging origin
+   * commonly serves `Disallow: /`, and silently returning zero pages there is
+   * worse than crawling a site you already own.
+   */
+  ignoreRobots?: boolean;
 }

@@ -6,6 +6,7 @@ export {
   extractPage,
   extractRobotsTxt,
   extractSitemapUrls,
+  isCrawlable,
 } from './extract.js';
 export { detectPlatform, withGuidance, GUIDANCE } from './rules/guidance.js';
 export type { Guidance } from './rules/guidance.js';
@@ -19,6 +20,7 @@ export {
   formatJson,
   formatMarkdown,
   formatPretty,
+  formatSarif,
   shouldFail,
   summarize,
 } from './report.js';

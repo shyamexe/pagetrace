@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { auditCrossPage } from '../src/audit.js';
+import { auditCrossPage, auditSite } from '../src/audit.js';
 import { detectPlatform, withGuidance, GUIDANCE } from '../src/rules/guidance.js';
-import { aggregate, formatAuditHtml, formatAuditMarkdown, formatAuditPretty } from '../src/report.js';
+import { aggregate, formatAuditHtml, formatAuditMarkdown, formatAuditPretty, formatSarif } from '../src/report.js';
 import type { Aggregate, Finding, PageFingerprint, Snapshot } from '../src/types.js';
 
 function page(route: string, overrides: Partial<PageFingerprint> = {}): PageFingerprint {
@@ -37,6 +37,26 @@ function snapshot(pages: PageFingerprint[]): Snapshot {
 const codes = (findings: Finding[]) => findings.map((f) => f.code);
 
 describe('auditCrossPage', () => {
+  it('flags a canonical that points at a URL which redirects', () => {
+    const findings = auditCrossPage(
+      snapshot([
+        page('/gold', { canonical: 'https://example.com/gold-rate' }),
+        page('/gold-rate', { redirectsTo: '/rates/gold' }),
+      ]),
+    );
+    const redirects = findings.filter((f) => f.code === 'canonical.redirects');
+    expect(redirects).toEqual([
+      expect.objectContaining({ route: '/gold', severity: 'warn' }),
+    ]);
+  });
+
+  it('stays quiet when the canonical target was never crawled', () => {
+    const findings = auditCrossPage(
+      snapshot([page('/gold', { canonical: 'https://example.com/never-fetched' })]),
+    );
+    expect(findings.map((f) => f.code)).not.toContain('canonical.redirects');
+  });
+
   it('passes a site with unique metadata', () => {
     const findings = auditCrossPage(snapshot([page('/'), page('/about'), page('/contact')]));
     expect(findings).toEqual([]);
@@ -321,5 +341,71 @@ describe('formatAuditPretty', () => {
 
   it('says so plainly when there is nothing wrong', () => {
     expect(plain(formatAuditPretty([], meta, 80))).toContain('No issues found across 12 pages');
+  });
+});
+
+describe('sitemap health rules', () => {
+  const withSitemap = (pages: PageFingerprint[], sitemap: { routes: string[]; dead: string[] }) => {
+    const snap = snapshot(pages);
+    snap.site.sitemap = sitemap;
+    return snap;
+  };
+
+  it('reports a sitemap URL that 404s as an error and one that redirects as a warning', () => {
+    const findings = auditSite(
+      withSitemap([page('/a', { redirectsTo: '/b' })], { routes: ['/a', '/gone'], dead: ['/gone'] }),
+    );
+    expect(findings).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'sitemap.dead', severity: 'error', route: '/gone' }),
+        expect.objectContaining({ code: 'sitemap.redirect', severity: 'warn', route: '/a' }),
+      ]),
+    );
+  });
+
+  it('says nothing about sitemaps for a filesystem crawl', () => {
+    const codes = auditSite(snapshot([page('/a')])).map((f) => f.code);
+    expect(codes.filter((c) => c.startsWith('sitemap.'))).toEqual([]);
+  });
+
+  it('explains both codes in the guidance table', () => {
+    expect(GUIDANCE['sitemap.dead']).toBeDefined();
+    expect(GUIDANCE['sitemap.redirect']).toBeDefined();
+    expect(GUIDANCE['canonical.redirects']).toBeDefined();
+  });
+});
+
+describe('formatSarif', () => {
+  const findings: Finding[] = [
+    { code: 'canonical.removed', severity: 'error', route: '/gold', message: 'Canonical was removed.' },
+    { code: 'title.long', severity: 'warn', route: '/gold', message: 'Title is too long.' },
+    { code: 'robotstxt.missing', severity: 'info', route: null, message: 'No robots.txt found.' },
+  ];
+
+  it('maps severities onto the three levels GitHub understands', () => {
+    const sarif = JSON.parse(formatSarif(findings));
+    expect(sarif.version).toBe('2.1.0');
+    expect(sarif.runs[0].results.map((r: { level: string }) => r.level)).toEqual([
+      'error',
+      'warning',
+      'note',
+    ]);
+  });
+
+  it('gives every result a location, using the route as the artifact', () => {
+    const sarif = JSON.parse(formatSarif(findings));
+    const uris = sarif.runs[0].results.map(
+      (r: { locations: { physicalLocation: { artifactLocation: { uri: string } } }[] }) =>
+        r.locations[0].physicalLocation.artifactLocation.uri,
+    );
+    // A site-wide finding has no route, and SARIF still requires somewhere to
+    // hang it, or GitHub drops the result on upload.
+    expect(uris).toEqual(['gold', 'gold', 'site']);
+  });
+
+  it('declares each rule once, however many results share it', () => {
+    const sarif = JSON.parse(formatSarif(findings));
+    const ids = sarif.runs[0].tool.driver.rules.map((r: { id: string }) => r.id);
+    expect(ids).toEqual(['canonical.removed', 'title.long', 'robotstxt.missing']);
   });
 });

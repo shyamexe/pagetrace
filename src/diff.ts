@@ -29,6 +29,9 @@ const SCALAR_FIELDS: FieldRule[] = [
   { field: 'title', label: 'Title', code: 'title', onRemoved: 'error', onChanged: 'info', onAdded: 'info' },
   { field: 'description', label: 'Meta description', code: 'description', onRemoved: 'warn', onChanged: 'info', onAdded: 'info' },
   { field: 'canonical', label: 'Canonical', code: 'canonical', onRemoved: 'error', onChanged: 'warn', onAdded: 'info' },
+  // A route that starts redirecting still answers, so nothing else in the
+  // fingerprint reports it: the surface simply becomes the destination's.
+  { field: 'redirectsTo', label: 'Redirect', code: 'redirect', onRemoved: 'info', onChanged: 'warn', onAdded: 'warn' },
 ];
 
 /**
@@ -60,8 +63,8 @@ export function diffPage(before: PageFingerprint, after: PageFingerprint): Findi
     findings.push({ code, severity, route, message, ...extra });
 
   for (const rule of SCALAR_FIELDS) {
-    const b = before[rule.field] as string | null;
-    const a = after[rule.field] as string | null;
+    const b = (before[rule.field] ?? null) as string | null;
+    const a = (after[rule.field] ?? null) as string | null;
     switch (transition(b, a)) {
       case 'removed':
         push(`${rule.code}.removed`, rule.onRemoved, `${rule.label} was removed.`, { before: b });

@@ -7,6 +7,7 @@ import {
   extractPage,
   extractRobotsTxt,
   extractSitemapUrls,
+  isCrawlable,
 } from './extract.js';
 import { DEFAULT_AI_AGENTS } from './rules/rich-results.js';
 import type { Config, PageFingerprint, SiteFingerprint, Snapshot } from './types.js';
@@ -29,6 +30,14 @@ export function routeFromUrl(url: string): string {
 }
 
 const exec = promisify(execFile);
+
+function originOf(url: string): string | null {
+  try {
+    return new URL(url).origin;
+  } catch {
+    return null;
+  }
+}
 
 /**
  * Read a committed lockfile out of a git ref rather than the working tree, so a
@@ -112,7 +121,13 @@ function isTransient(status: number): boolean {
  * is only practical with a retry, or one flaky response aborts a 200-page
  * crawl.
  */
-async function fetchText(url: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<string | null> {
+interface FetchedDoc {
+  text: string;
+  /** The URL the response actually came from, after any redirects. */
+  url: string;
+}
+
+async function fetchDoc(url: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<FetchedDoc | null> {
   let lastError: Error | undefined;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt += 1) {
@@ -130,13 +145,18 @@ async function fetchText(url: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<s
     }
 
     if (response.status === 404 || response.status === 410) return null;
-    if (response.ok) return await response.text();
+    if (response.ok) return { text: await response.text(), url: response.url };
 
     lastError = new Error(`Could not reach ${url}: HTTP ${response.status}.`);
     if (!isTransient(response.status)) break;
   }
 
   throw lastError;
+}
+
+/** Callers that only want the body: robots.txt, llms.txt, sitemaps. */
+async function fetchText(url: string, timeoutMs?: number): Promise<string | null> {
+  return (await fetchDoc(url, timeoutMs))?.text ?? null;
 }
 
 /** For speculative URLs, where a failure is a miss rather than a problem. */
@@ -166,6 +186,7 @@ export async function snapshotFromDir(dir: string, config: Config = {}): Promise
     origin: config.siteUrl ? new URL(config.siteUrl).origin : null,
     robotsTxt: null,
     llmsTxt: null,
+    sitemap: null,
   };
 
   const robots = await readFile(join(dir, 'robots.txt'), 'utf8').catch(() => null);
@@ -257,11 +278,14 @@ export async function snapshotFromOrigin(
       if (nested) for (const url of extractSitemapUrls(nested)) discovered.add(url);
     }
   }
+  // Distinguishes "the sitemap listed nothing" from "there was no sitemap":
+  // only the first is a fact about the site worth auditing.
+  const hadSitemap = discovered.size > 0;
   if (discovered.size === 0) discovered.add(base.href);
 
   // routeFromUrl drops the host, so an off-origin URL would silently overwrite
   // the same route from this site.
-  const targets = [...discovered]
+  const crawlable = [...discovered]
     .filter((url) => {
       try {
         return new URL(url).origin === base.origin;
@@ -270,7 +294,18 @@ export async function snapshotFromOrigin(
       }
     })
     .filter((url) => !shouldIgnore(routeFromUrl(url), options.ignoreRoutes))
-    .slice(0, limit);
+    // Crawling what a site asked crawlers not to touch is rude even when the
+    // site is yours, and a disallowed path is usually disallowed because its
+    // SEO surface is not meant to be judged.
+    .filter(
+      (url) => options.ignoreRobots || isCrawlable(new URL(url).pathname, site.robotsTxt),
+    );
+
+  if (hadSitemap) {
+    site.sitemap = { routes: crawlable.map(routeFromUrl), dead: [] };
+  }
+
+  const targets = crawlable.slice(0, limit);
 
   const pages: Record<string, PageFingerprint> = {};
   const concurrency = Math.max(1, options.concurrency ?? 5);
@@ -280,10 +315,28 @@ export async function snapshotFromOrigin(
     Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
       while (queue.length > 0) {
         const url = queue.shift()!;
-        const html = await fetchText(url, timeout);
-        if (html === null) continue;
+        const doc = await fetchDoc(url, timeout);
+        if (doc === null) {
+          // A 404 behind a sitemap entry is the sitemap's problem, not a crawl
+          // failure: the URL exists as a claim and answers as if it does not.
+          site.sitemap?.dead.push(routeFromUrl(url));
+          continue;
+        }
         const route = routeFromUrl(url);
-        pages[route] = extractPage(html, route);
+        // Keyed by the route asked for, not the one served: the question a diff
+        // answers is what this URL does now, and it used to serve a page.
+        // The fingerprint therefore describes the destination's HTML, so a new
+        // redirect also reports the title and canonical it now resolves to.
+        const page = extractPage(doc.text, route);
+        // An empty response.url means the client did not tell us where the body
+        // came from, which is no evidence of a redirect — never a redirect to "".
+        const landed = !doc.url
+          ? route
+          : originOf(doc.url) === base.origin
+            ? routeFromUrl(doc.url)
+            : doc.url;
+        page.redirectsTo = landed === route ? null : landed;
+        pages[route] = page;
       }
     }),
   );

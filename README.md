@@ -21,12 +21,20 @@ Requires Node 20.19 or newer. No native modules, three small dependencies.
 
 ## Use
 
-Record a baseline from your build output:
+Set up a config file and the first baseline in one step:
+
+```bash
+npx pagetrace init --dir ./out
+```
+
+Or record the baseline on its own:
 
 ```bash
 npx pagetrace snapshot --dir ./out
 git add pagetrace.lock.json
 ```
+
+`init` never overwrites an existing config; it refreshes the lockfile and leaves your edits alone.
 
 Check every build against it:
 
@@ -113,6 +121,8 @@ npx pagetrace snapshot --url https://example.com --limit 200
 
 Routes are discovered from `robots.txt` sitemap declarations, falling back to `/sitemap.xml`. Sitemap indexes are followed one level, up to 50 children, and expansion stops once `--limit` is satisfied. Gzipped children are recognised but not read.
 
+Paths that `robots.txt` disallows are skipped, with the longest matching rule winning so an `Allow` exception still gets crawled. A staging origin that serves `Disallow: /` would therefore yield nothing — pass `--ignore-robots` (or set `"ignoreRobots": true` in the config) to crawl a site you own anyway.
+
 URLs pointing at another host are skipped. A page that cannot be fetched stops the run with an error rather than being dropped from the snapshot — a page silently missing from a crawl is indistinguishable from a page you deleted, and reporting a transient outage as a site-wide deletion is worse than failing.
 
 ### Version and updates
@@ -146,10 +156,17 @@ pagetrace update              # install it globally
 | `aeo.crawler.newly_blocked` | error | `robots.txt` started blocking an AI crawler |
 | `aeo.llmstxt.removed` | error | `/llms.txt` disappeared |
 | `page.removed` | warn | A route in the lockfile is no longer there |
+| `redirect.added` | warn | A route that used to answer directly now redirects |
+| `redirect.changed` | warn | A route redirects somewhere new |
+| `canonical.redirects` | warn | A canonical points at a URL that redirects |
+| `sitemap.dead` | error | The sitemap lists a URL that answers 404 |
+| `sitemap.redirect` | warn | The sitemap lists a URL that redirects |
 | `og.removed` / `hreflang.removed` | warn | Social or i18n tags dropped |
 | `title.changed` | info | Ordinary copy edit |
 
-Alongside the diff, `check` runs absolute rules: missing title, canonical, `h1`, or description; JSON-LD required and recommended properties for the twenty Schema.org types Google supports as rich results; thin content; images without `alt`; and AEO signals like whether the page opens with something an answer engine can quote. Disable with `--no-audit`.
+Redirects are recorded from the response itself, so they cost no extra requests. A redirect that only adds or drops a trailing slash is server configuration rather than drift and is not reported. `canonical.redirects` is only raised when the canonical's target was actually crawled, so a `--limit` run cannot invent it.
+
+Alongside the diff, `check` runs absolute rules: missing title, canonical, `h1`, or description; JSON-LD required and recommended properties for the thirty-three Schema.org types Google supports as rich results; thin content; images without `alt`; and AEO signals like whether the page opens with something an answer engine can quote. Disable with `--no-audit`.
 
 ## Config
 
@@ -200,7 +217,18 @@ Without the Action:
 - run: npx pagetrace check --dir ./out --baseline-branch origin/main --format github
 ```
 
-`--format` accepts `pretty`, `json`, `markdown` (sized for a PR comment), and `github` (workflow annotations).
+`--format` accepts `pretty`, `json`, `markdown` (sized for a PR comment), `github` (workflow annotations) and `sarif`.
+
+SARIF puts the findings in the Security tab and on the pull request itself, which survives longer than a comment:
+
+```yaml
+- run: npx pagetrace check --dir ./out --baseline-branch origin/main --format sarif > pagetrace.sarif
+- uses: github/codeql-action/upload-sarif@v3
+  with:
+    sarif_file: pagetrace.sarif
+```
+
+Needs `security-events: write`. Routes are not source files, so GitHub lists each finding without anchoring it to a line in the diff.
 
 ## Programmatic API
 

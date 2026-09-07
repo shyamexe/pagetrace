@@ -16,6 +16,7 @@ import {
   formatJson,
   formatMarkdown,
   formatPretty,
+  formatSarif,
   shouldFail,
   summarize,
 } from './report.js';
@@ -53,6 +54,7 @@ interface SourceFlags {
   url?: string;
   limit?: number;
   concurrency?: number;
+  ignoreRobots?: boolean;
 }
 
 const SEVERITIES: Severity[] = ['error', 'warn', 'info'];
@@ -84,6 +86,7 @@ async function build(flags: SourceFlags, config: Config): Promise<Snapshot> {
       ...config,
       limit: flags.limit,
       concurrency: flags.concurrency,
+      ignoreRobots: flags.ignoreRobots ?? config.ignoreRobots,
     });
   throw new Error('Provide a source: --dir <build directory> or --url <origin>.');
 }
@@ -96,6 +99,8 @@ function render(findings: ReturnType<typeof applyConfig>, format: string): strin
       return formatMarkdown(findings);
     case 'github':
       return formatGithub(findings);
+    case 'sarif':
+      return formatSarif(findings);
     default:
       return formatPretty(findings);
   }
@@ -109,6 +114,7 @@ cli
   .option('--url <origin>', 'Live origin to crawl')
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
+  .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--out <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .action(async (flags) => {
@@ -129,9 +135,10 @@ cli
   .option('--url <origin>', 'Live origin to crawl')
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
+  .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--lockfile <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
-  .option('--format <format>', 'pretty | json | markdown | github', { default: 'pretty' })
+  .option('--format <format>', 'pretty | json | markdown | github | sarif', { default: 'pretty' })
   .option('--fail-on <severity>', 'error | warn | info', { default: 'error' })
   .option('--audit', 'Also run absolute rules, not just the diff', { default: true })
   .option('--update', 'Write the new state to the lockfile after reporting')
@@ -187,6 +194,7 @@ cli
   .option('--dir <dir>', 'Directory of built HTML')
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
+  .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown | html', { default: 'pretty' })
   .option('--out <file>', 'Write the report to a file instead of stdout')
@@ -242,6 +250,38 @@ cli
     if (failOn !== 'never' && shouldFail(findings, failOn)) {
       process.exitCode = EXIT_FINDINGS;
     }
+  });
+
+cli
+  .command('init', 'Write a config file and take the first snapshot')
+  .option('--dir <dir>', 'Directory of built HTML')
+  .option('--url <origin>', 'Live origin to crawl')
+  .option('--limit <n>', 'Max pages to crawl', { default: 200 })
+  .option('--concurrency <n>', 'Parallel requests', { default: 5 })
+  .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
+  .option('--out <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
+  .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
+  .action(async (flags) => {
+    // Never clobber a config that already exists — it is hand-edited, and the
+    // snapshot below is the part worth re-running anyway.
+    const existing = await readFile(flags.config, 'utf8').catch(() => null);
+    if (existing === null) {
+      const config: Config = flags.url ? { siteUrl: new URL(flags.url).origin } : {};
+      await writeFile(flags.config, `${JSON.stringify(config, null, 2)}\n`, 'utf8');
+      console.log(pc.green(`Wrote ${flags.config}.`));
+    } else {
+      console.log(pc.dim(`${flags.config} already exists — leaving it alone.`));
+    }
+
+    const snapshot = await build(flags, await loadConfig(flags.config));
+    const count = Object.keys(snapshot.pages).length;
+    await writeLockfile(flags.out, snapshot);
+    console.log(pc.green(`Wrote ${flags.out} — ${count} page${count === 1 ? '' : 's'}.`));
+    console.log(
+      pc.dim(
+        `\nCommit both files, then run \`pagetrace check ${flags.dir ? `--dir ${flags.dir}` : `--url ${flags.url}`}\` in CI.`,
+      ),
+    );
   });
 
 cli

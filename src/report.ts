@@ -113,6 +113,57 @@ export function formatGithub(findings: Finding[]): string {
  * template defect produces hundreds of identical findings; the useful unit is
  * "canonical missing on 43 pages", not 43 separate lines.
  */
+const SARIF_LEVEL: Record<Severity, string> = { error: 'error', warn: 'warning', info: 'note' };
+
+/**
+ * SARIF 2.1.0, for `github/codeql-action/upload-sarif`: findings become PR
+ * annotations and Security tab entries instead of one comment.
+ *
+ * ponytail: a route is not a file path, so GitHub lists the finding without
+ * anchoring it in a diff. Mapping routes back to source files is only possible
+ * for a --dir crawl; do it there if inline annotations turn out to matter.
+ */
+export function formatSarif(findings: Finding[]): string {
+  const rules = [...new Map(findings.map((f) => [f.code, f])).values()].map((f) => ({
+    id: f.code,
+    shortDescription: { text: f.message },
+    defaultConfiguration: { level: SARIF_LEVEL[f.severity] },
+  }));
+
+  return JSON.stringify(
+    {
+      $schema: 'https://json.schemastore.org/sarif-2.1.0.json',
+      version: '2.1.0',
+      runs: [
+        {
+          tool: {
+            driver: {
+              name: 'pagetrace',
+              informationUri: 'https://github.com/shyamexe/pagetrace',
+              rules,
+            },
+          },
+          results: findings.map((f) => ({
+            ruleId: f.code,
+            level: SARIF_LEVEL[f.severity],
+            message: { text: f.message },
+            locations: [
+              {
+                physicalLocation: {
+                  artifactLocation: { uri: f.route ? f.route.replace(/^\//, '') || 'index' : 'site' },
+                  region: { startLine: 1 },
+                },
+              },
+            ],
+          })),
+        },
+      ],
+    },
+    null,
+    2,
+  );
+}
+
 export function aggregate(findings: Finding[]): Aggregate[] {
   const map = new Map<string, Aggregate>();
   for (const finding of findings) {

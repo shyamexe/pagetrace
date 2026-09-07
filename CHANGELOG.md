@@ -6,6 +6,47 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.10.0] - 2026-09-08
+
+### Added
+
+- Redirect drift. A crawl now records where each route actually landed, taken
+  from the response itself at no extra request. `redirect.added` and
+  `redirect.changed` (warn) and `redirect.removed` (info) report a route that
+  starts, moves or stops redirecting — a whole class of change that was
+  previously invisible, since a redirected route still answers. A redirect that
+  only adds or drops a trailing slash is server configuration, not drift, and is
+  not reported.
+- `canonical.redirects` (warn): a canonical naming a URL that redirects is one
+  the engine may ignore. Only raised when the target was actually crawled.
+- Sitemap health. `sitemap.dead` (error) for a sitemap entry answering 404, and
+  `sitemap.redirect` (warn) for one that redirects. Both read data the crawl
+  already gathered.
+- `--format sarif` on `check`, for `github/codeql-action/upload-sarif`. Findings
+  become pull request annotations and Security tab entries.
+- `pagetrace init`: writes a config file and takes the first snapshot. An
+  existing config is never overwritten.
+- Thirteen more Schema.org types in the rich-results table, taking it from 20 to
+  33: Book, Dataset, QAPage, Question, Answer, ClaimReview, Movie, ProfilePage,
+  DiscussionForumPosting, ImageObject, SpecialAnnouncement,
+  EmployerAggregateRating and PodcastSeries.
+
+### Changed
+
+- An origin crawl now honours `robots.txt` `Disallow`, with longest-match-wins
+  and Allow winning ties, so `Disallow: /` plus `Allow: /blog` crawls the blog.
+  **A staging origin that serves `Disallow: /` now yields no pages** — pass
+  `--ignore-robots`, or set `"ignoreRobots": true`, to crawl a site you own.
+- **`sitemap.dead` is an error**, so a sitemap that already lists a dead URL
+  fails `check` on the first run after upgrading. The problem predates the rule.
+
+### Fixed
+
+- A field absent from an older lockfile read as a transition rather than as
+  missing information, because the scalar diff compared `undefined` against
+  `null`. Every optional field added from here on would have reported a phantom
+  change on every page of the first run.
+
 ## [0.9.1] - 2026-09-07
 
 ### Changed
@@ -281,6 +322,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.10.0]: https://github.com/shyamexe/pagetrace/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/shyamexe/pagetrace/compare/v0.9.0...v0.9.1
 [0.9.0]: https://github.com/shyamexe/pagetrace/compare/v0.8.1...v0.9.0
 [0.8.1]: https://github.com/shyamexe/pagetrace/compare/v0.8.0...v0.8.1
