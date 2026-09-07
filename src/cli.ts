@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { spawnSync } from 'node:child_process';
 import { readFile, writeFile } from 'node:fs/promises';
 import { cac } from 'cac';
 import pc from 'picocolors';
@@ -25,6 +26,7 @@ import {
   snapshotFromOrigin,
 } from './snapshot.js';
 import type { Config, Severity, Snapshot } from './types.js';
+import { isNewer, latestVersion } from './update.js';
 
 /** Injected from package.json at build time; see tsup.config.ts. */
 declare const __VERSION__: string;
@@ -242,12 +244,57 @@ cli
     }
   });
 
+cli
+  .command('update', 'Check npm for a newer pagetrace and install it')
+  .option('--check', 'Only report whether an update exists')
+  .action(async (flags) => {
+    const latest = await latestVersion('pagetrace');
+
+    if (!isNewer(latest, __VERSION__)) {
+      console.log(pc.green(`pagetrace ${__VERSION__} is the latest version.`));
+      return;
+    }
+    console.log(pc.yellow(`Update available: ${__VERSION__} → ${latest}`));
+    if (flags.check) return;
+
+    // Installing globally over a project-local copy would leave the version the
+    // project actually runs untouched, so hand that case back to the user.
+    if (process.argv[1]?.startsWith(process.cwd())) {
+      console.log(
+        pc.dim('This is a project-local install. Update it with your package manager, e.g.'),
+      );
+      console.log(`  npm install -D pagetrace@${latest}`);
+      return;
+    }
+
+    const { status, error } = spawnSync('npm', ['install', '-g', `pagetrace@${latest}`], {
+      stdio: 'inherit',
+    });
+    if (error || status !== 0) {
+      throw new Error(`npm install failed. Run \`npm install -g pagetrace@${latest}\` yourself.`);
+    }
+    console.log(pc.green(`Updated to pagetrace ${latest}.`));
+  });
+
 cli.help();
 cli.version(__VERSION__);
 
 async function main() {
   try {
     cli.parse(process.argv, { run: false });
+
+    // cac prints nothing for a bare or misspelled invocation, which reads as a
+    // silent success. Show the command list instead, and fail on a bad name.
+    if (!cli.matchedCommand) {
+      if (cli.options.help || cli.options.version) return;
+      cli.outputHelp();
+      if (cli.args[0]) {
+        console.error(pc.red(`\nUnknown command "${cli.args[0]}".`));
+        process.exitCode = EXIT_FAILURE;
+      }
+      return;
+    }
+
     await cli.runMatchedCommand();
   } catch (error) {
     console.error(pc.red((error as Error).message));

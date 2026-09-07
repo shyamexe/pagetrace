@@ -115,6 +115,18 @@ Routes are discovered from `robots.txt` sitemap declarations, falling back to `/
 
 URLs pointing at another host are skipped. A page that cannot be fetched stops the run with an error rather than being dropped from the snapshot — a page silently missing from a crawl is indistinguishable from a page you deleted, and reporting a transient outage as a site-wide deletion is worse than failing.
 
+### Version and updates
+
+```bash
+pagetrace                     # command list (same as --help)
+pagetrace <command> --help    # flags for one command
+pagetrace --version           # installed version
+pagetrace update --check      # ask npm whether a newer one exists
+pagetrace update              # install it globally
+```
+
+`update` refuses to install globally over a project-local copy and prints the package-manager command instead. Unrelated to `check --update`, which rewrites the lockfile.
+
 ## What it records
 
 **Per page** — title, meta description, canonical, robots directives, Open Graph and Twitter Card tags, hreflang alternates, `h1` text, heading outline, every JSON-LD entity with its property list, word count, images missing `alt`, and the length of the first quotable paragraph.

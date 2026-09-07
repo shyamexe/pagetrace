@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.9.0] - 2026-09-07
+
+### Added
+
+- `pagetrace update` asks the npm registry whether a newer version is published
+  and installs it. `--check` reports without installing. A project-local install
+  is not overwritten with a global one; the command prints the package-manager
+  command instead, because installing globally would leave the version the
+  project actually runs untouched.
+
+### Fixed
+
+- A bare `pagetrace`, or a misspelled command, printed nothing and exited 0,
+  which reads as a silent success. Both now print the command list, and an
+  unknown command exits 2.
+
 ## [0.8.1] - 2026-09-06
 
 ### Fixed
