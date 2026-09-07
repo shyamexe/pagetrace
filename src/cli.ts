@@ -253,6 +253,80 @@ cli
   });
 
 cli
+  .command('links', 'Find internal links that point at no page')
+  .option('--url <origin>', 'Live origin to crawl')
+  .option('--dir <dir>', 'Directory of built HTML')
+  .option('--limit <n>', 'Max pages to crawl', { default: 200 })
+  .option('--concurrency <n>', 'Parallel requests', { default: 5 })
+  .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
+  .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
+  .option('--format <format>', 'pretty | json | markdown', { default: 'pretty' })
+  .option('--out <file>', 'Write the report to a file instead of stdout')
+  .option('--fail-on <severity>', 'error | warn | info | never', { default: 'error' })
+  .action(async (flags) => {
+    const failOn = parseFailOn(flags.failOn, true);
+    const config = await loadConfig(flags.config);
+    const snapshot = await build(flags, config);
+    const pages = Object.values(snapshot.pages);
+
+    if (pages.length === 0) {
+      console.error(
+        pc.yellow(
+          'No pages found. Check that the sitemap is reachable, or pass --dir with pre-rendered HTML.',
+        ),
+      );
+      process.exitCode = EXIT_FAILURE;
+      return;
+    }
+
+    // Runs every rule and keeps the link ones. The rules are pure functions
+    // over a snapshot that is already in memory, so the waste is nothing and
+    // this cannot report something different from what `audit` reports.
+    const platform = detectPlatform(
+      pages.map((p) => p.generator),
+      pages.flatMap((p) => Object.values(p.og)),
+    );
+    const findings = applyConfig(auditSnapshot(snapshot, config), config)
+      .filter((f) => f.code.startsWith('link.'))
+      .map((f) => withGuidance(f, platform));
+
+    const target = flags.url ?? flags.dir ?? 'site';
+    if (findings.length === 0 && !flags.out) {
+      console.log(
+        pc.green(
+          `No broken links found — ${pages.length} page${pages.length === 1 ? '' : 's'} checked.`,
+        ),
+      );
+      return;
+    }
+
+    const groups = aggregate(findings);
+    const meta = {
+      target,
+      platform,
+      pageCount: pages.length,
+      generatedAt: new Date().toISOString().slice(0, 10),
+    };
+    const output =
+      flags.format === 'json'
+        ? JSON.stringify({ schemaVersion: 1, meta, summary: summarize(findings), groups }, null, 2)
+        : flags.format === 'markdown'
+          ? formatAuditMarkdown(groups, meta)
+          : formatAuditPretty(groups, meta, process.stdout.columns);
+
+    if (flags.out) {
+      await writeFile(flags.out, `${output}\n`, 'utf8');
+      console.log(pc.green(`Wrote ${flags.out} — ${groups.length} broken link${groups.length === 1 ? '' : 's'}.`));
+    } else {
+      console.log(output);
+    }
+
+    if (failOn !== 'never' && shouldFail(findings, failOn)) {
+      process.exitCode = EXIT_FINDINGS;
+    }
+  });
+
+cli
   .command('init', 'Write a config file and take the first snapshot')
   .option('--dir <dir>', 'Directory of built HTML')
   .option('--url <origin>', 'Live origin to crawl')

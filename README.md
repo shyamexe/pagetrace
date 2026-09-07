@@ -165,6 +165,15 @@ pagetrace update              # install it globally
 | `og.removed` / `hreflang.removed` | warn | Social or i18n tags dropped |
 | `title.changed` | info | Ordinary copy edit |
 
+Broken links have a command of their own, when that is the only question you have:
+
+```bash
+npx pagetrace links --url https://example.com
+npx pagetrace links --dir ./out --format json
+```
+
+It crawls once, runs the same rules as `audit`, and prints only the link findings — exit 1 if any, or `No broken links found — 42 pages checked.`
+
 Internal links are checked too. Only the broken ones are stored, so a site's navigation never lands in the lockfile: `link.broken` for a link that is already dead, `link.broken.added` for one this build broke. A `--dir` crawl is authoritative — the build directory is the whole site — while a crawl confirms each candidate with a real request first, because a sitemap routinely omits pages that are live. External links are deliberately not checked: a Cloudflare 403 and a rate limit both look like a dead page, and that is where link checkers earn their reputation for false positives.
 
 Redirects are recorded from the response itself, so they cost no extra requests. A redirect that only adds or drops a trailing slash is server configuration rather than drift and is not reported. `canonical.redirects` is only raised when the canonical's target was actually crawled, so a `--limit` run cannot invent it.
