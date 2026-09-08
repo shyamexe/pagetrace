@@ -102,6 +102,8 @@ async function walkHtml(dir: string, acc: string[] = []): Promise<string[]> {
   return acc;
 }
 
+const USER_AGENT = 'pagetrace (+https://npmjs.com/package/pagetrace)';
+
 const DEFAULT_TIMEOUT_MS = 15_000;
 const MAX_ATTEMPTS = 3;
 const RETRY_BASE_MS = 300;
@@ -138,7 +140,7 @@ async function fetchDoc(url: string, timeoutMs = DEFAULT_TIMEOUT_MS): Promise<Fe
     try {
       response = await fetch(url, {
         signal: AbortSignal.timeout(timeoutMs),
-        headers: { 'user-agent': 'pagetrace (+https://npmjs.com/package/pagetrace)' },
+        headers: { 'user-agent': USER_AGENT },
       });
     } catch (cause) {
       lastError = new Error(`Could not reach ${url}: ${(cause as Error).message}`, { cause });
@@ -201,7 +203,9 @@ export async function snapshotFromDir(dir: string, config: Config = {}): Promise
 
   // A build directory is the whole site, so a link resolving to no file here is
   // broken, with nothing to confirm over the network.
-  await resolveBrokenLinks(pages, links, site.origin ?? 'https://pagetrace.invalid');
+  const origin = site.origin ?? 'https://pagetrace.invalid';
+  await resolveBrokenLinks(pages, links, origin);
+  if (config.checkExternal) await resolveDeadExternal(pages, links, origin, 5);
 
   return { schemaVersion: 1, createdAt: new Date().toISOString(), site, pages };
 }
@@ -279,6 +283,97 @@ async function resolveBrokenLinks(
   for (const [route, missing] of candidates) {
     const confirmed = verify ? missing.filter((target) => broken.has(target)) : missing;
     if (confirmed.length > 0) pages[route].brokenLinks = confirmed.sort();
+  }
+}
+
+/** Absolute http(s) URL for an href that leaves the site, or null. */
+function externalUrl(href: string, from: string, origin: string): string | null {
+  try {
+    const url = new URL(href, `${origin}${from === '/' ? '' : from}/`);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') return null;
+    if (url.origin === origin) return null;
+    url.hash = '';
+    return url.href;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * ponytail: capped, so a link-heavy site checks the first MAX_EXTERNAL_CHECKS
+ * unique URLs. Raise it if a real site needs more; it is a request each.
+ */
+const MAX_EXTERNAL_CHECKS = 200;
+
+/**
+ * Only 404 and 410 count as dead. A 403 from a bot wall, a 429, a timeout, a
+ * TLS failure — all of those say something about the request, not about the
+ * page, and reporting them is exactly how link checkers become noise nobody
+ * reads. HEAD first, since most of these bodies are wasted bytes.
+ */
+async function findDeadExternal(
+  urls: string[],
+  concurrency: number,
+  timeoutMs = DEFAULT_TIMEOUT_MS,
+): Promise<Set<string>> {
+  const dead = new Set<string>();
+  const queue = urls.slice(0, MAX_EXTERNAL_CHECKS);
+  const request = (url: string, method: 'HEAD' | 'GET') =>
+    fetch(url, {
+      method,
+      redirect: 'follow',
+      signal: AbortSignal.timeout(timeoutMs),
+      headers: { 'user-agent': USER_AGENT },
+    });
+
+  await Promise.all(
+    Array.from({ length: Math.min(concurrency, queue.length) }, async () => {
+      while (queue.length > 0) {
+        const url = queue.shift()!;
+        try {
+          let response = await request(url, 'HEAD');
+          // Plenty of servers refuse HEAD outright, which says nothing about
+          // whether the page is there.
+          if (response.status === 405 || response.status === 501) {
+            response = await request(url, 'GET');
+          }
+          if (response.status === 404 || response.status === 410) dead.add(url);
+        } catch {
+          // Unreachable is unknown, and unknown must not become a finding.
+        }
+      }
+    }),
+  );
+  return dead;
+}
+
+async function resolveDeadExternal(
+  pages: Record<string, PageFingerprint>,
+  links: Record<string, string[]>,
+  origin: string,
+  concurrency: number,
+  timeoutMs?: number,
+): Promise<void> {
+  const perPage = new Map<string, string[]>();
+  const unique = new Set<string>();
+
+  for (const [route, hrefs] of Object.entries(links)) {
+    const external = [
+      ...new Set(
+        hrefs
+          .map((href) => externalUrl(href, route, origin))
+          .filter((url): url is string => url !== null),
+      ),
+    ];
+    if (external.length === 0) continue;
+    perPage.set(route, external);
+    for (const url of external) unique.add(url);
+  }
+
+  const dead = await findDeadExternal([...unique], concurrency, timeoutMs);
+  for (const [route, external] of perPage) {
+    const found = external.filter((url) => dead.has(url)).sort();
+    if (found.length > 0) pages[route].deadExternal = found;
   }
 }
 
@@ -438,6 +533,10 @@ export async function snapshotFromOrigin(
       return false;
     }
   });
+
+  if (options.checkExternal) {
+    await resolveDeadExternal(pages, links, base.origin, concurrency, timeout);
+  }
 
   return { schemaVersion: 1, createdAt: new Date().toISOString(), site, pages };
 }

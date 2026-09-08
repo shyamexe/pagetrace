@@ -237,7 +237,7 @@ describe('isCrawlable', () => {
 });
 
 describe('extractLinks', () => {
-  it('keeps internal hrefs and drops what is not a page on this site', () => {
+  it('keeps every href that could be dead, and drops the ones that cannot', () => {
     const html = `<html><body>
       <a href="/about">About</a>
       <a href="contact">Contact</a>
@@ -250,6 +250,13 @@ describe('extractLinks', () => {
       <a href="//cdn.example.org/page">Protocol relative</a>
       <a>No href</a>
     </body></html>`;
-    expect(extractLinks(html)).toEqual(['/about', 'contact']);
+    // Classifying internal from external needs the page's own URL, which lives
+    // in snapshot.ts. Fragments and non-http schemes can never 404, so they go.
+    expect(extractLinks(html)).toEqual([
+      '/about',
+      'contact',
+      'https://example.org/page',
+      '//cdn.example.org/page',
+    ]);
   });
 });

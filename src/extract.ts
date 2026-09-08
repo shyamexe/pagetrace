@@ -281,22 +281,22 @@ export function isCrawlable(
 }
 
 /**
- * Internal-looking hrefs on the page, deduplicated, in document order.
+ * Every href on the page worth resolving, deduplicated, in document order.
+ * Both internal and external: snapshot.ts is the only layer that knows the
+ * page's own URL, so classification happens there.
  *
- * Resolution happens in snapshot.ts, which is the only layer that knows the
- * page's own URL and the full set of routes. Anything with a scheme is somebody
- * else's problem: an external link checker fans out to hosts you do not
- * control, where a Cloudflare 403 and a rate limit both look like a dead page.
+ * Dropped here because they can never be dead: fragments, mailto:, tel:,
+ * javascript: and other non-http schemes.
  */
 export function extractLinks(html: string): string[] {
   const root = parse(html);
   const hrefs = new Set<string>();
   for (const anchor of root.querySelectorAll('a[href]')) {
     const href = anchor.getAttribute('href')?.trim();
-    if (!href) continue;
-    // Fragments, mailto:, tel:, javascript:, protocol-relative and absolute
-    // URLs. A bare "#" section link is the same page by definition.
-    if (href.startsWith('#') || href.startsWith('//') || /^[a-z][a-z0-9+.-]*:/i.test(href)) continue;
+    if (!href || href.startsWith('#')) continue;
+    // A scheme that is not http(s) is not a link to a page. Protocol-relative
+    // (//host/path) inherits the page's scheme, so it stays.
+    if (/^[a-z][a-z0-9+.-]*:/i.test(href) && !/^https?:/i.test(href)) continue;
     hrefs.add(href);
   }
   return [...hrefs];

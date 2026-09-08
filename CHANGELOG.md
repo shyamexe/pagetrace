@@ -6,6 +6,27 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.12.0] - 2026-09-08
+
+### Added
+
+- `--external` checks links that leave the site, on `links`, `audit`, `check`
+  and `snapshot`. Only 404 and 410 count as dead: a 403 from a bot wall, a 429,
+  a timeout and a TLS failure all describe the request rather than the page.
+  `HEAD` first with a `GET` fallback, one request per unique URL across the
+  site, capped at 200. Off by default — it fans out to hosts you do not control,
+  and recording their availability in a lockfile turns a third party's bad
+  afternoon into a diff in your repository.
+- `link.external.dead` (warn) and `link.external.dead.added`. A warning rather
+  than an error: the page belongs to someone who can delete it without asking.
+
+### Fixed
+
+- Absolute internal links were invisible. `extractLinks` dropped every href with
+  a scheme, so a site writing `https://example.com/about` rather than `/about`
+  had its links checked not at all. They are now resolved against the site's own
+  origin like any other link.
+
 ## [0.11.0] - 2026-09-08
 
 ### Added
@@ -338,6 +359,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.12.0]: https://github.com/shyamexe/pagetrace/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/shyamexe/pagetrace/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/shyamexe/pagetrace/compare/v0.9.1...v0.10.0
 [0.9.1]: https://github.com/shyamexe/pagetrace/compare/v0.9.0...v0.9.1

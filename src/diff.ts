@@ -142,6 +142,13 @@ export function diffPage(before: PageFingerprint, after: PageFingerprint): Findi
       before: target,
     });
 
+  const deadBefore = before.deadExternal ?? [];
+  const deadAfter = after.deadExternal ?? [];
+  for (const target of deadAfter.filter((t) => !deadBefore.includes(t)))
+    push('link.external.dead.added', 'warn', `Links out to ${target}, which answers 404.`, {
+      after: target,
+    });
+
   const droppedHreflang = Object.keys(before.hreflang).filter((k) => !(k in after.hreflang));
   if (droppedHreflang.length > 0)
     push('hreflang.removed', 'warn', 'hreflang alternates were removed.', {

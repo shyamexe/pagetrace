@@ -100,13 +100,24 @@ export function auditPage(page: PageFingerprint, config: Config = {}): Finding[]
  * would report "a URL does not exist" and leave you to find which.
  */
 function auditLinks(page: PageFingerprint): Finding[] {
-  return (page.brokenLinks ?? []).map((target) => ({
-    code: 'link.broken',
-    severity: 'error' as const,
-    route: page.route,
-    message: `Links to ${target}, which does not exist.`,
-    after: target,
-  }));
+  return [
+    ...(page.brokenLinks ?? []).map((target) => ({
+      code: 'link.broken',
+      severity: 'error' as const,
+      route: page.route,
+      message: `Links to ${target}, which does not exist.`,
+      after: target,
+    })),
+    // A warning, not an error: the page it points at belongs to somebody else,
+    // who can delete it on a Tuesday without asking you.
+    ...(page.deadExternal ?? []).map((target) => ({
+      code: 'link.external.dead',
+      severity: 'warn' as const,
+      route: page.route,
+      message: `Links out to ${target}, which answers 404.`,
+      after: target,
+    })),
+  ];
 }
 
 export function auditSite(snapshot: Snapshot): Finding[] {

@@ -43,6 +43,10 @@ export const GUIDANCE: Record<string, Guidance> = {
       nextjs: 'A `<Link href>` pointing at a route that no longer exists. TypeScript will not catch it — typed routes are opt-in via `experimental.typedRoutes`.',
     },
   },
+  'link.external.dead': {
+    why: 'An outbound link to a page that is gone sends readers to a 404 and spends the trust the link was passing on nothing. Unlike an internal link, the page is not yours to restore.',
+    fix: 'Point the link at the current URL, at an archived copy, or remove it. A link that has been dead a while is usually a citation worth replacing rather than deleting.',
+  },
   'sitemap.dead': {
     why: 'A sitemap is a list of URLs you are asking to have crawled. Entries that 404 spend crawl budget on nothing and lower the trust placed in the rest of the file.',
     fix: 'Remove the URL from the sitemap, or restore the page. If it moved, redirect it and list the destination instead.',

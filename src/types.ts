@@ -47,6 +47,12 @@ export interface PageFingerprint {
    * property the lockfile has to have.
    */
   brokenLinks?: string[];
+  /**
+   * External links that answered 404 or 410. Only present when the crawl was
+   * asked to check them: it means a request per unique external URL, to hosts
+   * you do not control.
+   */
+  deadExternal?: string[];
 }
 
 /** Site-wide signals that live outside any single page. */
@@ -150,4 +156,10 @@ export interface Config {
    * worse than crawling a site you already own.
    */
   ignoreRobots?: boolean;
+  /**
+   * Also check links that leave the site. Off by default: it fans out to hosts
+   * you do not control, and a lockfile that records their availability turns a
+   * third party's bad afternoon into a diff in your repository.
+   */
+  checkExternal?: boolean;
 }

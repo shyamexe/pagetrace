@@ -55,6 +55,7 @@ interface SourceFlags {
   limit?: number;
   concurrency?: number;
   ignoreRobots?: boolean;
+  external?: boolean;
 }
 
 const SEVERITIES: Severity[] = ['error', 'warn', 'info'];
@@ -80,13 +81,15 @@ async function loadConfig(path = DEFAULT_CONFIG): Promise<Config> {
 }
 
 async function build(flags: SourceFlags, config: Config): Promise<Snapshot> {
-  if (flags.dir) return snapshotFromDir(flags.dir, config);
+  const checkExternal = flags.external ?? config.checkExternal;
+  if (flags.dir) return snapshotFromDir(flags.dir, { ...config, checkExternal });
   if (flags.url)
     return snapshotFromOrigin(flags.url, {
       ...config,
       limit: flags.limit,
       concurrency: flags.concurrency,
       ignoreRobots: flags.ignoreRobots ?? config.ignoreRobots,
+      checkExternal,
     });
   throw new Error('Provide a source: --dir <build directory> or --url <origin>.');
 }
@@ -115,6 +118,7 @@ cli
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
+  .option('--external', 'Also check links that leave the site')
   .option('--out <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .action(async (flags) => {
@@ -136,6 +140,7 @@ cli
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
+  .option('--external', 'Also check links that leave the site')
   .option('--lockfile <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown | github | sarif', { default: 'pretty' })
@@ -195,6 +200,7 @@ cli
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
+  .option('--external', 'Also check links that leave the site')
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown | html', { default: 'pretty' })
   .option('--out <file>', 'Write the report to a file instead of stdout')
@@ -259,6 +265,7 @@ cli
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
+  .option('--external', 'Also check links that leave the site')
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown', { default: 'pretty' })
   .option('--out <file>', 'Write the report to a file instead of stdout')
@@ -333,6 +340,7 @@ cli
   .option('--limit <n>', 'Max pages to crawl', { default: 200 })
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
+  .option('--external', 'Also check links that leave the site')
   .option('--out <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .action(async (flags) => {

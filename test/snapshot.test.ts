@@ -183,6 +183,68 @@ describe('broken internal links', () => {
   });
 });
 
+describe('external links', () => {
+  const page = (hrefs: string[]) =>
+    `<html><head><title>A</title></head><body>${hrefs.map((h) => `<a href="${h}">l</a>`).join('')}</body></html>`;
+
+  const stubExternal = (statuses: Record<string, number>) => {
+    const asked: { url: string; method: string }[] = [];
+    vi.stubGlobal('fetch', async (url: string, init?: { method?: string }) => {
+      asked.push({ url, method: init?.method ?? 'GET' });
+      const routes: Record<string, string> = {
+        [`${ORIGIN}/sitemap.xml`]: `<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`,
+        [`${ORIGIN}/a`]: page(Object.keys(statuses)),
+      };
+      if (routes[url]) return new Response(routes[url], { status: 200 });
+      if (url in statuses) return new Response('', { status: statuses[url] });
+      return new Response('nope', { status: 404 });
+    });
+    return asked;
+  };
+
+  it('does nothing unless asked, since the hosts are not yours', async () => {
+    const asked = stubExternal({ 'https://elsewhere.test/gone': 404 });
+    const snapshot = await snapshotFromOrigin(ORIGIN);
+    expect(snapshot.pages['/a'].deadExternal).toBeUndefined();
+    expect(asked.some((a) => a.url.startsWith('https://elsewhere.test'))).toBe(false);
+  });
+
+  it('reports only 404 and 410, never a bot wall or a rate limit', async () => {
+    stubExternal({
+      'https://elsewhere.test/gone': 404,
+      'https://elsewhere.test/retired': 410,
+      'https://elsewhere.test/botwall': 403,
+      'https://elsewhere.test/ratelimited': 429,
+      'https://elsewhere.test/broken': 500,
+      'https://elsewhere.test/fine': 200,
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN, { checkExternal: true });
+    expect(snapshot.pages['/a'].deadExternal).toEqual([
+      'https://elsewhere.test/gone',
+      'https://elsewhere.test/retired',
+    ]);
+  });
+
+  it('asks with HEAD, and falls back to GET when the server refuses it', async () => {
+    const asked = stubExternal({ 'https://elsewhere.test/nohead': 405 });
+    await snapshotFromOrigin(ORIGIN, { checkExternal: true });
+    const forUrl = asked.filter((a) => a.url === 'https://elsewhere.test/nohead');
+    expect(forUrl.map((a) => a.method)).toEqual(['HEAD', 'GET']);
+  });
+
+  it('treats an unreachable host as unknown rather than dead', async () => {
+    vi.stubGlobal('fetch', async (url: string) => {
+      if (url === `${ORIGIN}/sitemap.xml`)
+        return new Response(`<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`, { status: 200 });
+      if (url === `${ORIGIN}/a`) return new Response(page(['https://elsewhere.test/x']), { status: 200 });
+      if (url.startsWith('https://elsewhere.test')) throw new Error('ENOTFOUND');
+      return new Response('nope', { status: 404 });
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN, { checkExternal: true });
+    expect(snapshot.pages['/a'].deadExternal).toBeUndefined();
+  });
+});
+
 describe('robots.txt during a crawl', () => {
   const routes = {
     [`${ORIGIN}/robots.txt`]: 'User-agent: *\nDisallow: /admin',
