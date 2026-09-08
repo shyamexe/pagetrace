@@ -3,3 +3,6 @@ dist
 coverage
 *.log
 CLAUDE.md
+
+# Built from src/browser.ts by `npm run build:site`; the Pages workflow rebuilds it.
+docs/browser.global.js

@@ -1,6 +1,6 @@
 {
   "name": "pagetrace",
-  "version": "0.14.0",
+  "version": "0.14.1",
   "description": "Baseline your site's SEO and AEO surface, diff every build against it, and fail CI on regressions.",
   "main": "./dist/index.cjs",
   "scripts": {
@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "coverage": "vitest run --coverage",
     "typecheck": "tsc --noEmit",
-    "prepublishOnly": "npm run typecheck && npm run test && npm run build"
+    "prepublishOnly": "npm run typecheck && npm run test && npm run build",
+    "build:site": "tsup src/browser.ts --format iife --global-name pagetrace --platform browser --minify --no-dts --out-dir docs"
   },
   "keywords": [
     "seo",

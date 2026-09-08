@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.14.1] - 2026-09-08
+
+### Added
+
+- A website at [shyamexe.github.io/pagetrace](https://shyamexe.github.io/pagetrace/), built from
+  `docs/` and deployed by GitHub Pages. Its playground compiles `extract`, `audit` and `diff` into
+  the page via a new `src/browser.ts` entry, so it runs the same rules as the CLI rather than a
+  reimplementation of them. `npm run build:site` produces the bundle, and the Pages workflow rebuilds
+  it on every deploy so it cannot drift from the rules it claims to run.
+
 ## [0.14.0] - 2026-09-08
 
 ### Added
@@ -385,6 +395,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.14.1]: https://github.com/shyamexe/pagetrace/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/shyamexe/pagetrace/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/shyamexe/pagetrace/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/shyamexe/pagetrace/compare/v0.11.0...v0.12.0

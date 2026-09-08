@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>pagetrace — see what a deploy changed about your SEO</title>
+<meta name="description" content="pagetrace fingerprints your site's SEO and AEO surface, diffs every build against a committed baseline, and fails CI on regressions. Try the real rule engine in your browser.">
+<link rel="canonical" href="https://shyamexe.github.io/pagetrace/">
+<meta property="og:title" content="pagetrace — see what a deploy changed about your SEO">
+<meta property="og:description" content="Baseline your site's SEO surface, diff every build against it, fail CI on regressions. Try the rule engine in your browser, no install.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://shyamexe.github.io/pagetrace/">
+<meta name="twitter:card" content="summary_large_object">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"SoftwareApplication","name":"pagetrace","applicationCategory":"DeveloperApplication","operatingSystem":"Node.js 20.19+","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Shyam","url":"https://www.shyamjith.in/"},"description":"Baseline your site's SEO and AEO surface, diff every build against it, and fail CI on regressions.","url":"https://github.com/shyamexe/pagetrace"}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper: #f3f5f6;
+    --panel: #ffffff;
+    --sunk: #e8ecee;
+    --line: #d3dadd;
+    --line-soft: #e3e8ea;
+    --ink: #141b1f;
+    --ink-2: #47575f;
+    --ink-3: #71838c;
+    --accent: #0d6e69;
+    --accent-soft: #d9eceb;
+    --error: #c8362c;
+    --error-soft: #fbe6e3;
+    --warn: #a86616;
+    --warn-soft: #fbeedb;
+    --info: #5a6b78;
+    --info-soft: #e7ecef;
+    --ok: #0d6e69;
+    --ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --r: 6px;
+    --shadow: 0 1px 2px rgba(20,27,31,.06), 0 8px 24px -16px rgba(20,27,31,.28);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0f1418; --panel: #151d22; --sunk: #111a1f;
+      --line: #26333a; --line-soft: #1e2a30;
+      --ink: #e2eaec; --ink-2: #a3b3ba; --ink-3: #75888f;
+      --accent: #4fbdb3; --accent-soft: #123430;
+      --error: #f08076; --error-soft: #3a1c19;
+      --warn: #e0a75c; --warn-soft: #362614;
+      --info: #93a6b1; --info-soft: #1c262c;
+      --ok: #4fbdb3;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0f1418; --panel: #151d22; --sunk: #111a1f;
+    --line: #26333a; --line-soft: #1e2a30;
+    --ink: #e2eaec; --ink-2: #a3b3ba; --ink-3: #75888f;
+    --accent: #4fbdb3; --accent-soft: #123430;
+    --error: #f08076; --error-soft: #3a1c19;
+    --warn: #e0a75c; --warn-soft: #362614;
+    --info: #93a6b1; --info-soft: #1c262c;
+    --ok: #4fbdb3;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--ui);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  img { max-width: 100%; }
+  a { color: var(--accent); }
+
+  .wrap { max-width: 1180px; margin: 0 auto; padding: 0 24px; }
+
+  /* ---------- top bar ---------- */
+  .topbar {
+    border-bottom: 1px solid var(--line);
+    background: var(--panel);
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .topbar .wrap {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding-top: 12px;
+    padding-bottom: 12px;
+    flex-wrap: wrap;
+  }
+
+  .mark {
+    font-family: var(--mono);
+    font-weight: 600;
+    font-size: 17px;
+    letter-spacing: -0.02em;
+    display: flex;
+    align-items: center;
+    gap: 2px;
+    color: var(--ink);
+    text-decoration: none;
+  }
+
+  .caret {
+    width: 9px;
+    height: 17px;
+    background: var(--accent);
+    display: inline-block;
+    animation: blink 1.3s steps(1) infinite;
+  }
+
+  @keyframes blink { 50% { opacity: 0; } }
+
+  .topnav { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; align-items: center; }
+  .topnav a { color: var(--ink-2); text-decoration: none; font-size: 14px; }
+  .topnav a:hover { color: var(--accent); }
+  .topnav .ver { font-family: var(--mono); font-size: 12px; color: var(--ink-3); border: 1px solid var(--line); border-radius: 100px; padding: 1px 8px; }
+
+  /* ---------- hero ---------- */
+  .hero { padding: 56px 0 40px; border-bottom: 1px solid var(--line); }
+  .hero .wrap { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(0, .95fr); gap: 44px; align-items: center; }
+  @media (max-width: 940px) { .hero .wrap { grid-template-columns: minmax(0, 1fr); gap: 28px; } }
+
+  h1 {
+    font-size: clamp(30px, 4vw, 44px);
+    line-height: 1.12;
+    letter-spacing: -0.025em;
+    margin: 0 0 16px;
+    text-wrap: balance;
+    font-weight: 600;
+  }
+
+  h1 em { font-style: normal; color: var(--accent); }
+
+  .hero p.lede { font-size: 17px; color: var(--ink-2); margin: 0 0 24px; max-width: 56ch; }
+  .hero p.lede strong { color: var(--ink); font-weight: 500; }
+
+  .cta { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
+
+  .install {
+    font-family: var(--mono);
+    font-size: 13.5px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 9px 14px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .install .prompt { color: var(--accent); }
+
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 500;
+    padding: 10px 16px;
+    border-radius: var(--r);
+    text-decoration: none;
+    border: 1px solid transparent;
+  }
+
+  .btn.primary { background: var(--accent); color: #fff; }
+  .btn.ghost { border-color: var(--line); color: var(--ink-2); background: var(--panel); }
+  .btn.ghost:hover { color: var(--accent); border-color: var(--accent); }
+
+  /* terminal sample in hero */
+  .term {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+    overflow: hidden;
+    font-family: var(--mono);
+    font-size: 12.5px;
+  }
+
+  .term-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    border-bottom: 1px solid var(--line-soft);
+    color: var(--ink-3);
+    font-size: 11.5px;
+    letter-spacing: .05em;
+    text-transform: uppercase;
+  }
+
+  .term-body { padding: 12px 14px; overflow-x: auto; font-size: 12px; }
+  .term-body pre { margin: 0; white-space: pre; }
+  .t-cmd { color: var(--ink); }
+  .t-dim { color: var(--ink-3); }
+  .t-err { color: var(--error); }
+  .t-warn { color: var(--warn); }
+  .t-ok { color: var(--ok); }
+  .t-code { color: var(--ink-3); }
+
+  /* ---------- sections ---------- */
+  section { padding: 52px 0; border-bottom: 1px solid var(--line); }
+
+  .eyebrow {
+    font-family: var(--mono);
+    font-size: 11.5px;
+    letter-spacing: .12em;
+    text-transform: uppercase;
+    color: var(--accent);
+    margin: 0 0 10px;
+  }
+
+  h2 { font-size: 26px; letter-spacing: -0.02em; margin: 0 0 12px; font-weight: 600; text-wrap: balance; }
+  h3 { font-size: 17px; margin: 0 0 6px; font-weight: 600; }
+
+  .section-lede { color: var(--ink-2); max-width: 64ch; margin: 0 0 28px; }
+
+  .two-col { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 20px; }
+  @media (max-width: 800px) { .two-col { grid-template-columns: minmax(0, 1fr); } }
+
+  .compare { border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 18px; display: flex; flex-direction: column; gap: 8px; }
+  .compare.them { opacity: .92; }
+  .compare h3 { color: var(--ink); }
+  .compare p { margin: 0; color: var(--ink-2); font-size: 14px; }
+  .compare .tag { font-family: var(--mono); font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+  .compare.us { border-left: 3px solid var(--accent); }
+
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  .table-scroll { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); }
+  th, td { text-align: left; padding: 9px 14px; border-bottom: 1px solid var(--line-soft); vertical-align: top; }
+  th { font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); font-weight: 500; white-space: nowrap; }
+  tr:last-child td { border-bottom: 0; }
+  td code, th code { font-family: var(--mono); font-size: 12.5px; }
+  td.cmd { white-space: nowrap; }
+  .sev-pill { font-family: var(--mono); font-size: 11px; text-transform: uppercase; letter-spacing: .06em; padding: 2px 7px; border-radius: 3px; }
+  .sev-pill.error { color: var(--error); background: var(--error-soft); }
+  .sev-pill.warn { color: var(--warn); background: var(--warn-soft); }
+  .sev-pill.info { color: var(--info); background: var(--info-soft); }
+
+  pre.code {
+    font-family: var(--mono);
+    font-size: 12.5px;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    padding: 14px;
+    overflow-x: auto;
+    margin: 0;
+    line-height: 1.6;
+  }
+
+  /* ---------- playground ---------- */
+  .modes { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; width: fit-content; background: var(--panel); flex-wrap: wrap; }
+  .modes button { appearance: none; border: 0; background: transparent; color: var(--ink-2); font-family: var(--ui); font-size: 13px; font-weight: 500; padding: 9px 16px; cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
+  .modes button + button { border-left: 1px solid var(--line); }
+  .modes button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .modes button .cmd { font-family: var(--mono); font-size: 12px; opacity: .78; }
+
+  .scenarios { display: flex; flex-wrap: wrap; gap: 6px; margin: 16px 0; }
+  .chip { appearance: none; font-family: var(--mono); font-size: 12px; padding: 5px 10px; border-radius: 100px; border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer; }
+  .chip:hover { border-color: var(--accent); color: var(--ink); }
+  .chip[aria-pressed="true"] { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); font-weight: 500; }
+
+  .bench { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+  @media (max-width: 900px) { .bench { grid-template-columns: minmax(0, 1fr); } }
+
+  .pane { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); display: flex; flex-direction: column; min-width: 0; }
+  .pane-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 14px; border-bottom: 1px solid var(--line-soft); }
+  .pane-title { font-family: var(--mono); font-size: 12px; font-weight: 500; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+  .pane-hint { font-family: var(--mono); font-size: 12px; color: var(--ink-3); }
+
+  .editor-label { font-family: var(--mono); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); padding: 8px 14px 4px; }
+  textarea { width: 100%; border: 0; border-top: 1px solid var(--line-soft); background: var(--sunk); color: var(--ink); font-family: var(--mono); font-size: 12.5px; line-height: 1.6; padding: 12px 14px; resize: vertical; tab-size: 2; }
+  textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+  .fetch-row { display: flex; gap: 8px; padding: 12px 14px; border-top: 1px solid var(--line-soft); flex-wrap: wrap; }
+  .fetch-row input {
+    flex: 1 1 240px;
+    min-width: 0;
+    font-family: var(--mono);
+    font-size: 13px;
+    padding: 8px 10px;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--sunk);
+    color: var(--ink);
+  }
+  .fetch-row input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+  .fetch-row button { font-family: var(--ui); font-size: 13px; font-weight: 500; padding: 8px 14px; border-radius: var(--r); border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer; }
+  .fetch-row button:disabled { opacity: .55; cursor: default; }
+  .fetch-note { padding: 0 14px 12px; font-size: 12.5px; color: var(--ink-3); max-width: 60ch; }
+  .fetch-note.err { color: var(--error); }
+
+  .summary { display: flex; align-items: center; gap: 14px; flex-wrap: wrap; padding: 12px 14px; border-bottom: 1px solid var(--line-soft); font-family: var(--mono); font-size: 12.5px; }
+  .tally { display: flex; align-items: center; gap: 6px; color: var(--ink-2); }
+  .dot { width: 8px; height: 8px; border-radius: 100px; display: inline-block; }
+  .dot.error { background: var(--error); }
+  .dot.warn { background: var(--warn); }
+  .dot.info { background: var(--info); }
+  .exit { margin-left: auto; font-family: var(--mono); font-size: 12px; padding: 2px 8px; border-radius: 100px; border: 1px solid var(--line); color: var(--ink-2); }
+  .exit[data-code="1"] { color: var(--error); border-color: var(--error); background: var(--error-soft); }
+  .exit[data-code="0"] { color: var(--ok); border-color: var(--ok); background: var(--accent-soft); }
+
+  .findings { display: flex; flex-direction: column; max-height: 620px; overflow-y: auto; }
+  .finding { display: grid; grid-template-columns: 3px 1fr; border-bottom: 1px solid var(--line-soft); }
+  .finding:last-child { border-bottom: 0; }
+  .stripe { background: var(--info); }
+  .finding[data-sev="error"] .stripe { background: var(--error); }
+  .finding[data-sev="warn"] .stripe { background: var(--warn); }
+  .finding-body { padding: 12px 14px; display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+  .finding-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .sev { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; color: var(--info); background: var(--info-soft); }
+  .finding[data-sev="error"] .sev { color: var(--error); background: var(--error-soft); }
+  .finding[data-sev="warn"] .sev { color: var(--warn); background: var(--warn-soft); }
+  .msg { font-weight: 500; }
+  .code-tag { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-left: auto; }
+  .transition { font-family: var(--mono); font-size: 12px; display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; color: var(--ink-2); background: var(--sunk); border-radius: 4px; padding: 7px 9px; overflow-x: auto; }
+  .transition .was { text-decoration: line-through; color: var(--ink-3); }
+  .transition .arrow { color: var(--accent); }
+  .transition .now { color: var(--ink); }
+  .why { font-size: 13.5px; color: var(--ink-2); margin: 0; max-width: 62ch; }
+  .fix { font-size: 13.5px; color: var(--ink); margin: 0; max-width: 62ch; display: flex; gap: 7px; }
+  .fix::before { content: "\2192"; color: var(--accent); flex: none; }
+  .empty { padding: 30px 16px; text-align: center; color: var(--ink-2); display: flex; flex-direction: column; gap: 4px; }
+  .empty .big { font-family: var(--mono); color: var(--ok); font-size: 14px; }
+
+  details.fp { border-top: 1px solid var(--line-soft); }
+  details.fp > summary { cursor: pointer; padding: 10px 14px; font-family: var(--mono); font-size: 12px; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); list-style: none; }
+  details.fp > summary::-webkit-details-marker { display: none; }
+  details.fp > summary::before { content: "\25B8 "; color: var(--accent); }
+  details.fp[open] > summary::before { content: "\25BE "; }
+  .fp-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 4px 16px; padding: 0 14px 14px; font-family: var(--mono); font-size: 12px; }
+  .fp-grid dt { color: var(--ink-3); }
+  .fp-grid dd { margin: 0; color: var(--ink); overflow-wrap: anywhere; }
+  .fp-grid dd.none { color: var(--ink-3); font-style: italic; }
+
+  .scenario-note { font-size: 13.5px; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); border-left: 3px solid var(--accent); border-radius: var(--r); padding: 11px 14px; max-width: 82ch; margin: 16px 0 0; }
+
+  .limits { font-size: 13.5px; color: var(--ink-3); max-width: 76ch; margin: 14px 0 0; }
+  .limits code { font-family: var(--mono); font-size: 12.5px; color: var(--ink-2); }
+
+  /* ---------- author ---------- */
+  .author-card { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 20px; align-items: start; border: 1px solid var(--line); border-radius: var(--r); background: var(--panel); padding: 22px; }
+  @media (max-width: 620px) { .author-card { grid-template-columns: minmax(0, 1fr); } }
+  .sig { font-family: var(--mono); font-size: 30px; font-weight: 600; color: var(--accent); letter-spacing: -0.03em; line-height: 1; }
+  .author-card p { margin: 0 0 10px; color: var(--ink-2); max-width: 62ch; }
+  .author-card p:last-child { margin-bottom: 0; }
+  .author-links { display: flex; gap: 16px; flex-wrap: wrap; font-size: 14px; }
+
+  footer { padding: 30px 0 56px; color: var(--ink-3); font-size: 13.5px; }
+  footer .wrap { display: flex; gap: 10px 26px; flex-wrap: wrap; align-items: baseline; }
+  footer a { color: var(--ink-2); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+  }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="mark" href="#top">pagetrace<span class="caret"></span></a>
+    <nav class="topnav">
+      <span class="ver" id="npm-ver">v0.14.0</span>
+      <a href="#playground">Playground</a>
+      <a href="#commands">Commands</a>
+      <a href="#catches">What it catches</a>
+      <a href="#ci">CI</a>
+      <a href="https://github.com/shyamexe/pagetrace">GitHub</a>
+      <a href="https://www.npmjs.com/package/pagetrace">npm</a>
+    </nav>
+  </div>
+</div>
+
+<div class="hero" id="top">
+  <div class="wrap">
+    <div>
+      <h1>Your deploy dropped a canonical from 400 pages. <em>Nothing told you.</em></h1>
+      <p class="lede">
+        pagetrace records your site's SEO and AEO surface as a committed lockfile, then diffs every build
+        against it. Plenty of tools score a page's current state. This one tells you
+        <strong>what this deploy changed</strong> — and fails the build over it.
+      </p>
+      <div class="cta">
+        <div class="install"><span class="prompt">$</span> npm i -D pagetrace</div>
+        <a class="btn primary" href="#playground">Try it in your browser</a>
+        <a class="btn ghost" href="https://github.com/shyamexe/pagetrace">Read the docs</a>
+      </div>
+    </div>
+
+    <div class="term">
+      <div class="term-head">npx pagetrace check --dir ./out</div>
+      <div class="term-body"><pre><span class="t-dim">(site-wide)</span>
+  <span class="t-err">error</span> GPTBot is now blocked.    <span class="t-code">aeo.crawler.newly_blocked</span>
+
+<span class="t-dim">/pricing</span>
+  <span class="t-err">error</span> Canonical was removed.    <span class="t-code">canonical.removed</span>
+  <span class="t-err">error</span> Page became noindex.      <span class="t-code">robots.noindex.added</span>
+  <span class="t-warn">warn </span> Links to /plans-old.      <span class="t-code">link.broken.added</span>
+
+<span class="t-dim">/blog/launch</span>
+  <span class="t-err">error</span> Article entity removed.   <span class="t-code">jsonld.entity.removed</span>
+
+<span class="t-err">Failing: 4 error, 1 warning.</span>
+<span class="t-dim">exit 1</span></pre></div>
+    </div>
+  </div>
+</div>
+
+<section id="why">
+  <div class="wrap">
+    <p class="eyebrow">Why a diff</p>
+    <h2>A page can be perfect and still be a regression</h2>
+    <p class="section-lede">
+      Every auditor answers "how is this page doing?" — a score, out of context, on a day you happened to look.
+      That question cannot see the thing that actually hurts: a template edit that silently changed 400 pages
+      between Tuesday and Wednesday.
+    </p>
+    <div class="two-col">
+      <div class="compare them">
+        <span class="tag">State-based tools</span>
+        <h3>"This page scores 82."</h3>
+        <p>
+          True yesterday, true today, true after the canonical disappeared — because the score was never
+          compared against anything. You find out from the traffic graph, six weeks later.
+        </p>
+      </div>
+      <div class="compare us">
+        <span class="tag">pagetrace</span>
+        <h3>"This deploy removed the canonical."</h3>
+        <p>
+          Severity comes from the transition, not the state. A reworded title is <code>info</code>. A removed
+          canonical is <code>error</code>, and the build stops. Routine content churn stays quiet, which is the
+          only reason anyone leaves the gate switched on.
+        </p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<section id="playground">
+  <div class="wrap">
+    <p class="eyebrow">Playground · no install</p>
+    <h2>Run the real rule engine, right here</h2>
+    <p class="section-lede">
+      This is not a demo of the tool — it is the tool. <code>extract</code>, <code>audit</code> and
+      <code>diff</code> are pure functions with no I/O, so the exact code that ships on npm is compiled into
+      this page. Nothing you paste leaves your browser.
+    </p>
+
+    <div class="modes" role="group" aria-label="What to check">
+      <button id="mode-audit" aria-pressed="true">What is wrong with this page? <span class="cmd">audit</span></button>
+      <button id="mode-diff" aria-pressed="false">What did this deploy change? <span class="cmd">check</span></button>
+    </div>
+
+    <div class="scenarios" id="scenarios"></div>
+
+    <div class="bench">
+      <section class="pane">
+        <div class="pane-head">
+          <span class="pane-title" id="input-title">Page HTML</span>
+          <span class="pane-hint">edit freely — findings update as you type</span>
+        </div>
+        <div id="wrap-a">
+          <div class="editor-label" id="label-a">Rendered HTML</div>
+          <textarea id="html-a" spellcheck="false" rows="16"></textarea>
+        </div>
+        <div id="wrap-b" hidden>
+          <div class="editor-label">After — this deploy</div>
+          <textarea id="html-b" spellcheck="false" rows="13"></textarea>
+        </div>
+        <div class="fetch-row">
+          <input id="url" type="url" placeholder="https://your-site.com/a-page" aria-label="Load a page from your own site">
+          <button id="fetch" type="button">Load my page</button>
+        </div>
+        <p class="fetch-note" id="fetch-note">
+          Browsers cannot read another site directly, so this route goes through a public CORS proxy —
+          your URL is visible to that service. Paste the HTML instead for anything private.
+        </p>
+      </section>
+
+      <section class="pane">
+        <div class="summary">
+          <span class="tally"><span class="dot error"></span><span id="n-error">0</span> error</span>
+          <span class="tally"><span class="dot warn"></span><span id="n-warn">0</span> warning</span>
+          <span class="tally"><span class="dot info"></span><span id="n-info">0</span> info</span>
+          <span class="exit" id="exit" data-code="0">exit 0</span>
+        </div>
+        <div class="findings" id="findings"></div>
+        <details class="fp">
+          <summary>Fingerprint — what it records</summary>
+          <dl class="fp-grid" id="fp"></dl>
+        </details>
+      </section>
+    </div>
+
+    <p class="scenario-note" id="note"></p>
+
+    <p class="limits">
+      What the browser cannot do, the CLI does: dead internal and external links, redirect drift, sitemap
+      health, duplicate titles across a site, hreflang reciprocity. Those need a crawl —
+      <code>npx pagetrace audit --url https://your-site.com</code>.
+    </p>
+  </div>
+</section>
+
+<section id="commands">
+  <div class="wrap">
+    <p class="eyebrow">The CLI</p>
+    <h2>Seven commands, one question each</h2>
+    <p class="section-lede">
+      Every crawling command takes <code>--dir &lt;build&gt;</code> or <code>--url &lt;origin&gt;</code>. Exit
+      codes are the same everywhere: <code>0</code> clean, <code>1</code> findings at or above
+      <code>--fail-on</code>, <code>2</code> the run itself broke — so CI can tell a regression from an outage.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Command</th><th>Answers</th><th>Crawls</th></tr></thead>
+        <tbody>
+          <tr><td class="cmd"><code>init</code></td><td>Get me set up</td><td>Once, to write the first lockfile</td></tr>
+          <tr><td class="cmd"><code>snapshot</code></td><td>Record what the site looks like now</td><td>Whole site</td></tr>
+          <tr><td class="cmd"><code>check</code></td><td>What did this deploy change?</td><td>Whole site</td></tr>
+          <tr><td class="cmd"><code>audit</code></td><td>What is wrong with this site?</td><td>Whole site</td></tr>
+          <tr><td class="cmd"><code>links</code></td><td>Are any links dead?</td><td>Whole site</td></tr>
+          <tr><td class="cmd"><code>page &lt;url&gt;</code></td><td>Is this one page sound?</td><td>That URL alone</td></tr>
+          <tr><td class="cmd"><code>update</code></td><td>Am I on the latest pagetrace?</td><td>Nothing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="limits">
+      Useful flags: <code>--external</code> checks outbound links, <code>--verify-all</code> adds assets like
+      PDFs, <code>--ignore-robots</code> crawls a staging origin that disallows everything, and
+      <code>--format</code> takes <code>pretty</code>, <code>json</code>, <code>markdown</code>,
+      <code>github</code> or <code>sarif</code>.
+    </p>
+  </div>
+</section>
+
+<section id="catches">
+  <div class="wrap">
+    <p class="eyebrow">Finding codes</p>
+    <h2>What it catches</h2>
+    <p class="section-lede">
+      Codes are the public contract — integrations key on <code>canonical.removed</code>, never on the prose.
+      A selection; the full set covers hreflang, AEO signals, structured data and llms.txt.
+    </p>
+    <div class="table-scroll">
+      <table>
+        <thead><tr><th>Code</th><th>Severity</th><th>Fires when</th></tr></thead>
+        <tbody>
+          <tr><td><code>canonical.removed</code></td><td><span class="sev-pill error">error</span></td><td>A page lost its canonical tag</td></tr>
+          <tr><td><code>robots.noindex.added</code></td><td><span class="sev-pill error">error</span></td><td>A page became noindex</td></tr>
+          <tr><td><code>jsonld.entity.removed</code></td><td><span class="sev-pill error">error</span></td><td>A structured data entity disappeared</td></tr>
+          <tr><td><code>jsonld.property.removed</code></td><td><span class="sev-pill error">error</span></td><td>An entity lost a property it used to have</td></tr>
+          <tr><td><code>content.dropped</code></td><td><span class="sev-pill error">error</span></td><td>Word count fell by more than half — usually a render failure</td></tr>
+          <tr><td><code>link.broken.added</code></td><td><span class="sev-pill error">error</span></td><td>A page started linking to a URL that does not exist</td></tr>
+          <tr><td><code>sitemap.dead</code></td><td><span class="sev-pill error">error</span></td><td>The sitemap lists a URL that answers 404</td></tr>
+          <tr><td><code>aeo.crawler.newly_blocked</code></td><td><span class="sev-pill error">error</span></td><td><code>robots.txt</code> started blocking an AI crawler</td></tr>
+          <tr><td><code>redirect.added</code></td><td><span class="sev-pill warn">warn</span></td><td>A route that used to answer directly now redirects</td></tr>
+          <tr><td><code>canonical.redirects</code></td><td><span class="sev-pill warn">warn</span></td><td>A canonical points at a URL that redirects</td></tr>
+          <tr><td><code>link.external.dead</code></td><td><span class="sev-pill warn">warn</span></td><td>An outbound link answers 404</td></tr>
+          <tr><td><code>title.changed</code></td><td><span class="sev-pill info">info</span></td><td>Ordinary copy edit — never fails a build</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<section id="ci">
+  <div class="wrap">
+    <p class="eyebrow">Continuous integration</p>
+    <h2>Where it earns its keep</h2>
+    <p class="section-lede">
+      The GitHub Action diffs each pull request against the lockfile committed on your default branch and
+      leaves the result as a comment, updating that same comment on every push instead of stacking new ones.
+      Feature branches carry no lockfile, so there is no churn to review.
+    </p>
+    <pre class="code">- uses: actions/checkout@v5
+- run: npm ci &amp;&amp; npm run build
+- uses: shyamexe/pagetrace@v1
+  with:
+    dir: ./out
+    baseline-branch: main</pre>
+    <p class="limits">
+      Prefer the Security tab? <code>--format sarif</code> piped into
+      <code>github/codeql-action/upload-sarif</code> turns findings into pull request annotations that outlive
+      any comment.
+    </p>
+  </div>
+</section>
+
+<section id="author">
+  <div class="wrap">
+    <p class="eyebrow">Who makes this</p>
+    <h2>Built and maintained by Shyam</h2>
+    <div class="author-card">
+      <div class="sig">$_</div>
+      <div>
+        <p>
+          I write and maintain pagetrace — the CLI, the GitHub Action, the rule tables, and this page. It
+          exists because I shipped a template change that quietly dropped canonicals across a site and found
+          out from analytics, weeks after the deploy that caused it.
+        </p>
+        <p>
+          It is MIT licensed, has three small dependencies on purpose, and publishes with npm provenance, so
+          every release traces back to the tagged commit and the workflow that built it.
+        </p>
+        <div class="author-links">
+          <a href="https://www.shyamjith.in/">shyamjith.in</a>
+          <a href="https://github.com/shyamexe">github.com/shyamexe</a>
+          <a href="https://www.npmjs.com/package/pagetrace">npm: pagetrace</a>
+          <a href="https://github.com/shyamexe/pagetrace/issues">Report an issue</a>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <span>MIT licensed</span>
+    <span>Node 20.19+</span>
+    <span>Three dependencies</span>
+    <span><a href="https://github.com/shyamexe/pagetrace/blob/main/CHANGELOG.md">Changelog</a></span>
+    <span>© <span id="year">2026</span> Shyam</span>
+  </div>
+</footer>
+
+<script src="./browser.global.js"></script>
+<script>
+(function () {
+  var pt = window.pagetrace;
+  document.getElementById('year').textContent = String(new Date().getFullYear());
+
+  // The bakery from examples/site — the fixture CI runs against on every push.
+  var CLEAN = [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <title>Northwind Bakery — Sourdough baked daily in Kochi</title>',
+    '  <meta name="description" content="A neighbourhood bakery in Kochi. Sourdough, croissants and cardamom buns, baked fresh every morning.">',
+    '  <link rel="canonical" href="https://northwind.example.com/">',
+    '  <meta property="og:title" content="Northwind Bakery">',
+    '  <meta property="og:image" content="https://northwind.example.com/og.png">',
+    '  <script type="application/ld+json">',
+    '  {"@context":"https://schema.org","@type":"Bakery","name":"Northwind Bakery","address":{"@type":"PostalAddress","addressLocality":"Kochi"},"telephone":"+91-484-000-0000","image":"https://northwind.example.com/og.png"}',
+    '  <\/script>',
+    '</head>',
+    '<body>',
+    '  <h1>Sourdough baked daily in Kochi</h1>',
+    '  <p>Northwind Bakery has been baking naturally leavened sourdough in Fort Kochi since 2011, using a starter kept alive for over a decade and flour milled in Kerala.</p>',
+    '  <h2>What we bake</h2>',
+    '  <p>Sourdough loaves come out of the oven at seven each morning, followed by croissants at eight and cardamom buns by nine. Everything is made the same day it is sold, and whatever is left at closing goes to the shelter on Princess Street.</p>',
+    '  <h2>Finding us</h2>',
+    '  <p>We are on Burgher Street, two doors down from the post office, open from seven in the morning until the shelves are empty, which is usually mid afternoon on weekends.</p>',
+    '  <h2>Ordering ahead</h2>',
+    '  <p>Whole loaves can be reserved by phone the day before, which is worth doing on Saturdays when the first bake is usually gone by half past eight. We do not take payment in advance and we hold reserved bread until noon, after which it goes back on the shelf for whoever is there.</p>',
+    '  <img src="/shopfront.jpg" alt="The Northwind Bakery shopfront on Burgher Street">',
+    '</body>',
+    '</html>'
+  ].join('\n');
+
+  function edit(html, fn) { return fn(html); }
+
+  var AUDIT_SCENARIOS = [
+    { name: 'canonical removed',
+      note: 'The single most expensive tag to lose. Without it, query strings, pagination and trailing-slash variants all compete as separate URLs and split the ranking signal between them.',
+      html: edit(CLEAN, function (h) { return h.replace(/\s*<link rel="canonical"[^>]*>\n/, '\n'); }) },
+    { name: 'clean page',
+      note: 'The fixture CI runs against on every push. A deliberately correct page reports nothing — which is the bar a rule has to clear before it ships.',
+      html: CLEAN },
+    { name: 'thin content',
+      note: 'Under 150 words by default, tunable with minWordCount. A heuristic, and labelled as one in the README — it is the rule most likely to be wrong about a real page.',
+      html: edit(CLEAN, function (h) { return h.replace(/<h2>What we bake<\/h2>[\s\S]*<img/, '<img'); }) },
+    { name: 'noindex',
+      note: 'A staging robots tag shipped to production. The page still renders perfectly for a human, which is why this survives review and why a diff catches it when a screenshot does not.',
+      html: edit(CLEAN, function (h) { return h.replace('<link rel="canonical"', '<meta name="robots" content="noindex, nofollow">\n  <link rel="canonical"'); }) },
+    { name: 'structured data gone',
+      note: 'The JSON-LD block that earns the rich result. Losing it costs the enhanced listing, and nothing on the rendered page looks any different.',
+      html: edit(CLEAN, function (h) { return h.replace(/\s*<script type="application\/ld\+json">[\s\S]*?<\/script>/, ''); }) },
+    { name: 'social tags gone',
+      note: 'Open Graph drives the preview card on every share, and increasingly what an answer engine quotes back. Missing image, missing card.',
+      html: edit(CLEAN, function (h) { return h.replace(/\s*<meta property="og:[^>]*>/g, ''); }) },
+    { name: 'title too long',
+      note: 'Past roughly 60 characters the tail is truncated in results, so the distinguishing words have to come first. Warn, not error — it still works, it just works less well.',
+      html: edit(CLEAN, function (h) { return h.replace(/<title>[^<]*<\/title>/, '<title>Northwind Bakery — Sourdough, croissants and cardamom buns baked fresh every single morning in Fort Kochi, Kerala</title>'); }) },
+    { name: 'no h1',
+      note: 'The heading that tells a reader and a parser what the page is about, in one line, before anything else.',
+      html: edit(CLEAN, function (h) { return h.replace(/<h1>[\s\S]*?<\/h1>/, ''); }) }
+  ];
+
+  var DIFF_SCENARIOS = [
+    { name: 'canonical removed',
+      note: 'The case the whole tool exists for. A template change drops one tag, every page still renders, and a state-based auditor scores the page and moves on. The transition is the finding.',
+      before: CLEAN,
+      after: edit(CLEAN, function (h) { return h.replace(/\s*<link rel="canonical"[^>]*>\n/, '\n'); }) },
+    { name: 'title reworded',
+      note: 'Ordinary copy editing. Reported as info, never a failure — a gate that cries about routine content churn is a gate people switch off.',
+      before: CLEAN,
+      after: edit(CLEAN, function (h) { return h.replace(/<title>[^<]*<\/title>/, '<title>Northwind Bakery — Fresh sourdough in Fort Kochi</title>'); }) },
+    { name: 'became noindex',
+      note: 'The highest-cost silent regression there is. Nothing about the page looks different to anyone reviewing the pull request.',
+      before: CLEAN,
+      after: edit(CLEAN, function (h) { return h.replace('<link rel="canonical"', '<meta name="robots" content="noindex">\n  <link rel="canonical"'); }) },
+    { name: 'entity lost a property',
+      before: CLEAN,
+      note: 'The Bakery entity survives the refactor but loses its telephone. Rich results quietly stop qualifying, and the page keeps rendering.',
+      after: edit(CLEAN, function (h) { return h.replace(',"telephone":"+91-484-000-0000"', ''); }) },
+    { name: 'canonical repointed',
+      note: 'Changed rather than removed, so it is a warning: sometimes deliberate, always worth a human look before it ships.',
+      before: CLEAN,
+      after: edit(CLEAN, function (h) { return h.replace('href="https://northwind.example.com/"', 'href="https://northwind.example.com/home"'); }) },
+    { name: 'description dropped',
+      note: 'Without one, the engine writes its own snippet out of whatever text it finds first, which is often a nav menu.',
+      before: CLEAN,
+      after: edit(CLEAN, function (h) { return h.replace(/\s*<meta name="description"[^>]*>/, ''); }) },
+    { name: 'nothing changed',
+      note: 'A reworded paragraph with every signal intact. Silence here is the feature: this is what most deploys should look like.',
+      before: CLEAN,
+      after: edit(CLEAN, function (h) { return h.replace('two doors down from the post office', 'a short walk from the post office'); }) }
+  ];
+
+  var mode = 'audit';
+  var picked = 0;
+
+  var els = {
+    scenarios: document.getElementById('scenarios'),
+    findings: document.getElementById('findings'),
+    fp: document.getElementById('fp'),
+    a: document.getElementById('html-a'),
+    b: document.getElementById('html-b'),
+    wrapB: document.getElementById('wrap-b'),
+    labelA: document.getElementById('label-a'),
+    inputTitle: document.getElementById('input-title'),
+    note: document.getElementById('note'),
+    nError: document.getElementById('n-error'),
+    nWarn: document.getElementById('n-warn'),
+    nInfo: document.getElementById('n-info'),
+    exit: document.getElementById('exit'),
+    modeAudit: document.getElementById('mode-audit'),
+    modeDiff: document.getElementById('mode-diff'),
+    url: document.getElementById('url'),
+    fetchBtn: document.getElementById('fetch'),
+    fetchNote: document.getElementById('fetch-note')
+  };
+
+  var DEFAULT_FETCH_NOTE = els.fetchNote.textContent;
+
+  function list() { return mode === 'audit' ? AUDIT_SCENARIOS : DIFF_SCENARIOS; }
+
+  function renderScenarios() {
+    els.scenarios.replaceChildren();
+    list().forEach(function (s, i) {
+      var b = document.createElement('button');
+      b.className = 'chip';
+      b.type = 'button';
+      b.textContent = s.name;
+      b.setAttribute('aria-pressed', String(i === picked));
+      b.addEventListener('click', function () { picked = i; load(); });
+      els.scenarios.appendChild(b);
+    });
+  }
+
+  function load() {
+    var s = list()[picked];
+    if (mode === 'audit') {
+      els.a.value = s.html;
+    } else {
+      els.a.value = s.before;
+      els.b.value = s.after;
+    }
+    els.note.textContent = s.note;
+    renderScenarios();
+    run();
+  }
+
+  function short(v) {
+    if (v === null || v === undefined || v === '') return null;
+    if (Array.isArray(v)) return v.join(', ');
+    if (typeof v === 'object') return v.type ? v.type + (v.properties ? ' (' + v.properties.join(', ') + ')' : '') : JSON.stringify(v);
+    return String(v);
+  }
+
+  function renderFindings(findings) {
+    els.findings.replaceChildren();
+
+    if (findings.length === 0) {
+      var empty = document.createElement('div');
+      empty.className = 'empty';
+      var big = document.createElement('div');
+      big.className = 'big';
+      big.textContent = mode === 'audit' ? 'No findings.' : 'No change to the surface.';
+      var sub = document.createElement('div');
+      sub.textContent = mode === 'audit'
+        ? 'Every rule ran and none of them fired.'
+        : 'Copy changed, signals did not. This deploy ships.';
+      empty.append(big, sub);
+      els.findings.appendChild(empty);
+      return;
+    }
+
+    var order = { error: 0, warn: 1, info: 2 };
+    findings.slice().sort(function (x, y) { return order[x.severity] - order[y.severity]; }).forEach(function (f) {
+      var row = document.createElement('div');
+      row.className = 'finding';
+      row.dataset.sev = f.severity;
+
+      var stripe = document.createElement('div');
+      stripe.className = 'stripe';
+
+      var body = document.createElement('div');
+      body.className = 'finding-body';
+
+      var top = document.createElement('div');
+      top.className = 'finding-top';
+      var sev = document.createElement('span');
+      sev.className = 'sev';
+      sev.textContent = f.severity;
+      var msg = document.createElement('span');
+      msg.className = 'msg';
+      msg.textContent = f.message;
+      var code = document.createElement('span');
+      code.className = 'code-tag';
+      code.textContent = f.code;
+      top.append(sev, msg, code);
+      body.appendChild(top);
+
+      var was = short(f.before);
+      var now = short(f.after);
+      if (was !== null || now !== null) {
+        var t = document.createElement('div');
+        t.className = 'transition';
+        if (was !== null) {
+          var w = document.createElement('span');
+          w.className = 'was';
+          w.textContent = was;
+          t.appendChild(w);
+        }
+        if (was !== null && now !== null) {
+          var ar = document.createElement('span');
+          ar.className = 'arrow';
+          ar.textContent = '→';
+          t.appendChild(ar);
+        }
+        if (now !== null) {
+          var n = document.createElement('span');
+          n.className = 'now';
+          n.textContent = now;
+          t.appendChild(n);
+        }
+        body.appendChild(t);
+      }
+
+      var g = pt.GUIDANCE[f.code];
+      if (g) {
+        var why = document.createElement('p');
+        why.className = 'why';
+        why.textContent = g.why;
+        var fix = document.createElement('p');
+        fix.className = 'fix';
+        fix.textContent = g.fix;
+        body.append(why, fix);
+      }
+
+      row.append(stripe, body);
+      els.findings.appendChild(row);
+    });
+  }
+
+  function renderFingerprint(page) {
+    var jsonld = page.jsonLd.map(function (e) { return e.type + ' (' + e.properties.length + ' props)'; });
+    var rows = [
+      ['route', page.route],
+      ['title', page.title],
+      ['description', page.description],
+      ['canonical', page.canonical],
+      ['robots', page.robots],
+      ['h1', page.h1.join(' / ')],
+      ['headings', page.headingOutline.join(' ')],
+      ['json-ld', jsonld.join(', ')],
+      ['open graph', Object.keys(page.og).join(', ')],
+      ['words', String(page.wordCount)],
+      ['images', page.images.total + ' total, ' + page.images.missingAlt + ' without alt'],
+      ['lead answer', page.leadAnswerWords + ' words'],
+      ['links', pt.extractLinks(els.a.value).join(', ')]
+    ];
+
+    els.fp.replaceChildren();
+    rows.forEach(function (r) {
+      var dt = document.createElement('dt');
+      dt.textContent = r[0];
+      var dd = document.createElement('dd');
+      if (r[1] === null || r[1] === undefined || r[1] === '') {
+        dd.className = 'none';
+        dd.textContent = 'none';
+      } else {
+        dd.textContent = r[1];
+      }
+      els.fp.append(dt, dd);
+    });
+  }
+
+  function run() {
+    var findings;
+    var page;
+    try {
+      if (mode === 'audit') {
+        page = pt.extractPage(els.a.value, '/');
+        // Page-level rules only. The playground never fetches robots.txt or
+        // llms.txt, so calling them missing would claim absence from a look
+        // that was never taken. Site-wide rules belong to the CLI.
+        findings = pt.auditPage(page, {});
+      } else {
+        page = pt.extractPage(els.b.value, '/');
+        findings = pt.diffPage(pt.extractPage(els.a.value, '/'), page);
+      }
+    } catch (err) {
+      els.findings.replaceChildren();
+      var e = document.createElement('div');
+      e.className = 'empty';
+      e.textContent = 'That HTML could not be parsed: ' + err.message;
+      els.findings.appendChild(e);
+      return;
+    }
+
+    var n = { error: 0, warn: 0, info: 0 };
+    findings.forEach(function (x) { n[x.severity] += 1; });
+
+    els.nError.textContent = n.error;
+    els.nWarn.textContent = n.warn;
+    els.nInfo.textContent = n.info;
+
+    var code = n.error > 0 ? 1 : 0;
+    els.exit.dataset.code = String(code);
+    els.exit.textContent = 'exit ' + code;
+
+    renderFindings(findings);
+    renderFingerprint(page);
+  }
+
+  function setMode(next) {
+    mode = next;
+    // Open on a scenario that reports something: a page at rest showing "no
+    // findings" demonstrates nothing. The clean fixture is one chip away.
+    picked = 0;
+    els.modeAudit.setAttribute('aria-pressed', String(mode === 'audit'));
+    els.modeDiff.setAttribute('aria-pressed', String(mode === 'diff'));
+    els.wrapB.hidden = mode !== 'diff';
+    els.labelA.textContent = mode === 'diff' ? 'Before — the committed lockfile' : 'Rendered HTML';
+    els.inputTitle.textContent = mode === 'diff' ? 'Two deploys' : 'Page HTML';
+    els.a.rows = mode === 'diff' ? 13 : 16;
+    load();
+  }
+
+  function setNote(text, isError) {
+    els.fetchNote.textContent = text;
+    els.fetchNote.classList.toggle('err', Boolean(isError));
+  }
+
+  async function loadUrl() {
+    var raw = els.url.value.trim();
+    if (!raw) return;
+    var target;
+    try {
+      target = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+    } catch (err) {
+      setNote('That does not look like a URL. Try https://example.com/a-page', true);
+      return;
+    }
+
+    els.fetchBtn.disabled = true;
+    setNote('Fetching ' + target.href + ' …', false);
+
+    try {
+      var response = await fetch('https://api.allorigins.win/raw?url=' + encodeURIComponent(target.href));
+      if (!response.ok) throw new Error('the proxy answered ' + response.status);
+      var html = await response.text();
+      if (!/<html|<head|<body/i.test(html)) throw new Error('that response was not HTML');
+
+      els.a.value = html;
+      if (mode === 'diff') els.b.value = html;
+      els.note.textContent = 'Loaded from ' + target.href + '. This is your page, checked by the same rules the CLI runs — edit the HTML above to see what would fix a finding.';
+      run();
+      setNote('Loaded ' + target.href + '. Nothing was stored; the HTML lives in this tab only.', false);
+    } catch (err) {
+      setNote(
+        'Could not load that page: ' + err.message + '. The proxy blocks some sites, and this page cannot reach it at all when opened as a preview. Paste the HTML instead — view source, copy, paste above.',
+        true
+      );
+    } finally {
+      els.fetchBtn.disabled = false;
+    }
+  }
+
+  els.modeAudit.addEventListener('click', function () { setMode('audit'); });
+  els.modeDiff.addEventListener('click', function () { setMode('diff'); });
+  els.a.addEventListener('input', run);
+  els.b.addEventListener('input', run);
+  els.fetchBtn.addEventListener('click', loadUrl);
+  els.url.addEventListener('keydown', function (e) { if (e.key === 'Enter') loadUrl(); });
+
+  setMode('audit');
+})();
+</script>
+</body>
+</html>

@@ -19,6 +19,10 @@ npm install -D pagetrace
 
 Requires Node 20.19 or newer. No native modules, three small dependencies.
 
+## Playground
+
+Try the rules without installing anything: **[shyamexe.github.io/pagetrace](https://shyamexe.github.io/pagetrace/)**. The site compiles `extract`, `audit` and `diff` — the pure half of this package — into the page, so it runs the same rules the CLI does, in your browser, with nothing uploaded.
+
 ## Commands
 
 | Command | Answers | Crawls | Exit 1 when |
