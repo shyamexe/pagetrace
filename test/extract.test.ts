@@ -203,6 +203,17 @@ describe('extractSitemapUrls', () => {
   });
 });
 
+describe('extractLlmsTxt', () => {
+  it('counts UTF-8 bytes, not characters', () => {
+    // Multi-byte content is the case that separates the two, and the reason
+    // this cannot go back to counting string length.
+    const body = '# Site\n\nസ്വർണ്ണ വില\n';
+    const llms = extractLlmsTxt(body);
+    expect(llms.bytes).toBe(new TextEncoder().encode(body).length);
+    expect(llms.bytes).toBeGreaterThan(body.length);
+  });
+});
+
 describe('isCrawlable', () => {
   const parse = (body: string) => extractRobotsTxt(body, []);
 

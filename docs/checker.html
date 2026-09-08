@@ -731,7 +731,8 @@ npx pagetrace links --url https://example.com --external</pre>
     log: document.getElementById('scan-log'),
     fill: document.getElementById('scan-fill'),
     total: 1,
-    done: 0
+    done: 0,
+    pending: null
   };
 
   function scanStart(total) {
@@ -757,13 +758,19 @@ npx pagetrace links --url https://example.com --external</pre>
     li.append(icon, text, note);
     scan.log.appendChild(li);
 
-    return function settle(state, noteText) {
+    var settle = function (state, noteText) {
       li.dataset.state = state;
       icon.textContent = state === 'ok' ? '✓' : state === 'fail' ? '✗' : '–';
       note.textContent = noteText || '';
       scan.done += 1;
       scan.fill.style.width = Math.round((scan.done / scan.total) * 100) + '%';
+      if (scan.pending === settle) scan.pending = null;
     };
+
+    // Whatever fails, the line still running is the one that failed. Blaming a
+    // fixed step reported the fetch as broken when the rules were.
+    scan.pending = settle;
+    return settle;
   }
 
   function scanEnd() {
@@ -886,7 +893,7 @@ npx pagetrace links --url https://example.com --external</pre>
       rulesStep('ok', 'done');
       setStatus('Checked ' + target.href + '. Edit the HTML below and the report follows along.');
     } catch (err) {
-      pageStep('fail', err.message);
+      if (scan.pending) scan.pending('fail', err.message);
       setStatus(
         'Could not read that page. A browser cannot fetch another site directly, so this borrows a public proxy, and all of them refused: ' +
         err.message + '. Paste the page source below instead — that path needs nobody.',
@@ -1227,6 +1234,7 @@ npx pagetrace links --url https://example.com --external</pre>
       var n = Object.keys(snapshot.pages).length;
       setStatus('Checked ' + n + (n === 1 ? ' page of ' : ' pages of ') + target.origin + '.');
     } catch (err) {
+      if (scan.pending) scan.pending('fail', err.message);
       setStatus('Could not crawl that site: ' + err.message, true);
     } finally {
       scanEnd();

@@ -6,6 +6,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.14.5] - 2026-09-08
+
+### Fixed
+
+- `extractLlmsTxt` used `Buffer.byteLength`, which does not exist in a browser,
+  so any page on a site that actually has an `/llms.txt` crashed the checker
+  with "Buffer is not defined". It counts UTF-8 bytes with `TextEncoder` now —
+  the same number, available everywhere. `extract.ts` is meant to be pure and
+  bundleable, and this was the one line that was not.
+- The scan log blamed the fetch for failures that happened after it, because
+  the error handler settled a fixed step rather than the one still running.
+
 ## [0.14.4] - 2026-09-08
 
 ### Added
@@ -452,6 +464,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.14.5]: https://github.com/shyamexe/pagetrace/compare/v0.14.4...v0.14.5
 [0.14.4]: https://github.com/shyamexe/pagetrace/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/shyamexe/pagetrace/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/shyamexe/pagetrace/compare/v0.14.1...v0.14.2

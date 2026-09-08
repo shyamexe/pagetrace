@@ -308,7 +308,9 @@ export function extractLlmsTxt(body: string) {
     .split(/\r?\n/)
     .filter((line) => line.startsWith('## '))
     .map((line) => line.slice(3).trim());
-  return { present: true, sections, bytes: Buffer.byteLength(body, 'utf8') };
+  // TextEncoder rather than Buffer: this file is pure and gets bundled for the
+  // browser, where Buffer does not exist. Both count UTF-8 bytes.
+  return { present: true, sections, bytes: new TextEncoder().encode(body).length };
 }
 
 const XML_ENTITIES: Record<string, string> = {
