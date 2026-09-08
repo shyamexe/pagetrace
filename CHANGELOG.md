@@ -6,6 +6,24 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.14.3] - 2026-09-08
+
+### Fixed
+
+- The checker could not fetch anything: it depended on one public CORS proxy,
+  and that proxy was returning Cloudflare 520s for every URL. It now tries
+  r.jina.ai, allorigins and codetabs in order and takes the first that answers
+  with HTML, so one service having a bad day no longer takes the feature down.
+
+### Added
+
+- A scan log. The check narrates itself as it runs — each request, its size and
+  which proxy served it, then the rule pass — instead of leaving a dead page
+  during the seconds it takes. A progress bar tracks the steps, the report dims
+  while it works, the score counts up to its value, and a category holding a
+  blocker gets a coloured edge.
+- Example URLs to try, so the page can be used without owning a site.
+
 ## [0.14.2] - 2026-09-08
 
 ### Added
@@ -412,6 +430,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.14.3]: https://github.com/shyamexe/pagetrace/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/shyamexe/pagetrace/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/shyamexe/pagetrace/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/shyamexe/pagetrace/compare/v0.13.0...v0.14.0

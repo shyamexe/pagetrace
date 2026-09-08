@@ -117,7 +117,64 @@
   }
   details.paste textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
 
+  /* ---------- scan console: the check narrating itself ---------- */
+  .scan {
+    margin: 18px 0 0;
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    background: var(--panel);
+    overflow: hidden;
+  }
+
+  .scan-bar { height: 2px; background: var(--sunk); }
+  .scan-bar i {
+    display: block; height: 100%; width: 0%;
+    background: var(--accent);
+    transition: width .35s ease;
+  }
+
+  .scan-log { margin: 0; padding: 10px 14px; list-style: none; display: flex; flex-direction: column; gap: 5px; }
+
+  .scan-log li {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) max-content;
+    gap: 10px;
+    align-items: baseline;
+    font-family: var(--mono);
+    font-size: 12.5px;
+    color: var(--ink-2);
+  }
+
+  .scan-log .s-note { color: var(--ink-3); font-variant-numeric: tabular-nums; }
+  .scan-log li[data-state="fail"] .s-note { color: var(--error); }
+  .scan-log li[data-state="skip"] { color: var(--ink-3); }
+  .scan-log li[data-state="ok"] .s-icon { color: var(--pass); }
+  .scan-log li[data-state="fail"] .s-icon { color: var(--error); }
+  .scan-log li[data-state="skip"] .s-icon { color: var(--ink-3); }
+
+  .spinner {
+    display: inline-block;
+    width: 10px; height: 10px;
+    border: 2px solid var(--line);
+    border-top-color: var(--accent);
+    border-radius: 100px;
+    animation: spin .7s linear infinite;
+  }
+
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  .examples { display: flex; gap: 6px; flex-wrap: wrap; margin: 12px 0 0; align-items: baseline; }
+  .examples span { font-size: 13px; color: var(--ink-3); }
+  .examples button {
+    font-family: var(--mono); font-size: 12px;
+    padding: 4px 10px; border-radius: 100px;
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer;
+  }
+  .examples button:hover { border-color: var(--accent); color: var(--accent); }
+
   .report { padding-bottom: 60px; }
+  .report[data-busy="true"] { opacity: .45; }
+  .report { transition: opacity .25s ease; }
   .report .wrap { display: flex; flex-direction: column; gap: 20px; }
 
   .scoreboard {
@@ -135,6 +192,7 @@
 
   .ring { position: relative; width: 128px; height: 128px; }
   .ring svg { transform: rotate(-90deg); display: block; }
+  #ring-arc { transition: stroke-dashoffset .9s cubic-bezier(.22,.61,.36,1), stroke .3s ease; }
   .ring .num {
     position: absolute; inset: 0;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
@@ -161,7 +219,21 @@
 
   .cats { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; align-items: start; }
 
-  .cat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .cat {
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+    display: flex;
+    flex-direction: column;
+    animation: rise .32s ease both;
+  }
+
+  /* A category with a blocker earns a stripe; the rest stay quiet. */
+  .cat[data-worst="error"] { border-top: 2px solid var(--error); }
+  .cat[data-worst="warn"] { border-top: 2px solid var(--warn); }
+
+  @keyframes rise { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
   .cat-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
   .cat-head h3 { font-size: 15px; margin: 0; font-weight: 600; }
   .cat-head .count { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
@@ -200,7 +272,10 @@
   footer a { color: var(--ink-2); }
 
   :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+  @media (prefers-reduced-motion: reduce) {
+    * { animation: none !important; transition: none !important; }
+    .cat { opacity: 1; transform: none; }
+  }
 </style>
 </head>
 <body>
@@ -229,7 +304,17 @@
       <input id="url" type="url" placeholder="https://example.com/pricing" aria-label="Page URL to check" autocomplete="url">
       <button id="go" type="submit">Check page</button>
     </form>
+    <div class="examples">
+      <span>Try:</span>
+      <button type="button" data-url="https://nodejs.org/en">nodejs.org</button>
+      <button type="button" data-url="https://developer.mozilla.org/en-US/">developer.mozilla.org</button>
+      <button type="button" data-url="https://example.com/">example.com</button>
+    </div>
     <p class="status" id="status"></p>
+    <div class="scan" id="scan" hidden>
+      <div class="scan-bar"><i id="scan-fill"></i></div>
+      <ol class="scan-log" id="scan-log"></ol>
+    </div>
     <details class="paste">
       <summary>Or paste the HTML instead — nothing leaves your browser</summary>
       <textarea id="html" rows="10" spellcheck="false"></textarea>
@@ -237,7 +322,7 @@
   </div>
 </div>
 
-<div class="report">
+<div class="report" id="report">
   <div class="wrap">
     <div class="scoreboard">
       <div class="ring">
@@ -396,6 +481,26 @@ npx pagetrace links --url https://example.com --external</pre>
     return Math.max(0, 100 - lost);
   }
 
+  var countFrame = null;
+
+  /** Counts the score up so the ring and the number arrive together. */
+  function countTo(score) {
+    if (countFrame) cancelAnimationFrame(countFrame);
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      els.score.textContent = String(score);
+      return;
+    }
+    var from = Number(els.score.textContent) || 0;
+    var started = performance.now();
+    var step = function (now) {
+      var t = Math.min(1, (now - started) / 700);
+      var eased = 1 - Math.pow(1 - t, 3);
+      els.score.textContent = String(Math.round(from + (score - from) * eased));
+      if (t < 1) countFrame = requestAnimationFrame(step);
+    };
+    countFrame = requestAnimationFrame(step);
+  }
+
   function verdictFor(score, errors) {
     if (errors > 0) {
       return ['Something here costs you traffic',
@@ -441,7 +546,7 @@ npx pagetrace links --url https://example.com --external</pre>
     });
 
     var score = scoreOf(findings);
-    els.score.textContent = String(score);
+    countTo(score);
     els.arc.style.stroke = counts.error > 0 ? 'var(--error)' : score >= 90 ? 'var(--pass)' : 'var(--warn)';
     els.arc.setAttribute('stroke-dashoffset', String(CIRCUMFERENCE * (1 - score / 100)));
 
@@ -458,6 +563,10 @@ npx pagetrace links --url https://example.com --external</pre>
       var rows = byCat[name];
       var card = document.createElement('section');
       card.className = 'cat';
+      card.dataset.worst = rows.some(function (r) { return r.state === 'error'; })
+        ? 'error'
+        : rows.some(function (r) { return r.state === 'warn'; }) ? 'warn' : 'pass';
+      card.style.animationDelay = (order.indexOf(name) * 40) + 'ms';
 
       var head = document.createElement('div');
       head.className = 'cat-head';
@@ -552,14 +661,93 @@ npx pagetrace links --url https://example.com --external</pre>
     render(page, findings, { siteFetched: Boolean(opts.site), label: opts.label });
   }
 
-  function proxied(url) {
-    return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+  /* ---------------- scan console ---------------- */
+
+  var scan = {
+    el: document.getElementById('scan'),
+    log: document.getElementById('scan-log'),
+    fill: document.getElementById('scan-fill'),
+    total: 1,
+    done: 0
+  };
+
+  function scanStart(total) {
+    scan.total = total;
+    scan.done = 0;
+    scan.log.replaceChildren();
+    scan.fill.style.width = '0%';
+    scan.el.hidden = false;
+    document.getElementById('report').dataset.busy = 'true';
+  }
+
+  function scanStep(label) {
+    var li = document.createElement('li');
+    li.dataset.state = 'run';
+    var icon = document.createElement('span');
+    icon.className = 's-icon';
+    icon.appendChild(document.createElement('i')).className = 'spinner';
+    var text = document.createElement('span');
+    text.className = 's-label';
+    text.textContent = label;
+    var note = document.createElement('span');
+    note.className = 's-note';
+    li.append(icon, text, note);
+    scan.log.appendChild(li);
+
+    return function settle(state, noteText) {
+      li.dataset.state = state;
+      icon.textContent = state === 'ok' ? '✓' : state === 'fail' ? '✗' : '–';
+      note.textContent = noteText || '';
+      scan.done += 1;
+      scan.fill.style.width = Math.round((scan.done / scan.total) * 100) + '%';
+    };
+  }
+
+  function scanEnd() {
+    document.getElementById('report').dataset.busy = 'false';
+  }
+
+  function size(text) {
+    var kb = text.length / 1024;
+    return kb >= 1 ? kb.toFixed(0) + ' KB' : text.length + ' B';
+  }
+
+  /* ---------------- fetching ----------------
+   *
+   * A browser cannot read another origin, so every route here is somebody
+   * else's proxy, and any one of them can be down on the day — allorigins was
+   * returning Cloudflare 520s while this page was being written. So they are
+   * tried in order and the first that answers with HTML wins, rather than one
+   * hard dependency that takes the feature down with it.
+   */
+  var PROXIES = [
+    { name: 'r.jina.ai',
+      url: function (u) { return 'https://r.jina.ai/' + u; },
+      init: { headers: { 'x-return-format': 'html' } } },
+    { name: 'allorigins',
+      url: function (u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); } },
+    { name: 'codetabs',
+      url: function (u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); } }
+  ];
+
+  async function fetchThrough(url) {
+    var failures = [];
+    for (var i = 0; i < PROXIES.length; i += 1) {
+      var proxy = PROXIES[i];
+      try {
+        var response = await fetch(proxy.url(url), proxy.init || undefined);
+        if (!response.ok) throw new Error('HTTP ' + response.status);
+        var body = await response.text();
+        return { body: body, via: proxy.name };
+      } catch (err) {
+        failures.push(proxy.name + ' (' + err.message + ')');
+      }
+    }
+    throw new Error('every route failed — ' + failures.join(', '));
   }
 
   async function fetchText(url) {
-    var response = await fetch(proxied(url));
-    if (!response.ok) throw new Error('the proxy answered ' + response.status);
-    return await response.text();
+    return (await fetchThrough(url)).body;
   }
 
   async function checkUrl(raw) {
@@ -572,43 +760,62 @@ npx pagetrace links --url https://example.com --external</pre>
     }
 
     els.go.disabled = true;
-    setStatus('Fetching ' + target.href + ' …');
+    setStatus('');
+    scanStart(4);
 
+    var pageStep = scanStep('GET ' + target.pathname);
     try {
-      var html = await fetchText(target.href);
-      if (!/<html|<head|<body/i.test(html)) throw new Error('that response was not HTML');
+      var fetched = await fetchThrough(target.href);
+      if (!/<html|<head|<body/i.test(fetched.body)) throw new Error('not HTML');
+      pageStep('ok', size(fetched.body) + ' · via ' + fetched.via);
 
-      setStatus('Reading robots.txt and llms.txt …');
-      // Fetched so the site-level checks answer from evidence. A miss here
-      // means "not checked", which is not the same as "missing".
-      var robotsBody = await fetchText(new URL('/robots.txt', target).href).catch(function () { return null; });
-      var llmsBody = await fetchText(new URL('/llms.txt', target).href).catch(function () { return null; });
-
-      // Plenty of hosts answer a missing file with a styled 404 page. That is
-      // not a robots.txt, and treating it as one would invent findings.
+      // Fetched so the site-level checks answer from evidence. A miss means
+      // "not checked", which is not the same as "missing".
       var isHtml = function (t) { return t !== null && /<html|<!doctype/i.test(t); };
 
+      var robotsStep = scanStep('GET /robots.txt');
+      var robotsBody = await fetchText(new URL('/robots.txt', target).href).catch(function () { return null; });
+      var robotsOk = robotsBody !== null && !isHtml(robotsBody);
+      robotsStep(robotsOk ? 'ok' : 'skip', robotsOk ? size(robotsBody) : 'not found');
+
+      var llmsStep = scanStep('GET /llms.txt');
+      var llmsBody = await fetchText(new URL('/llms.txt', target).href).catch(function () { return null; });
+      var llmsOk = llmsBody !== null && !isHtml(llmsBody);
+      llmsStep(llmsOk ? 'ok' : 'skip', llmsOk ? size(llmsBody) : 'not found');
+
+      var rulesStep = scanStep('Running 23 checks');
       var site = {
         origin: target.origin,
-        robotsTxt: robotsBody && !isHtml(robotsBody)
+        robotsTxt: robotsOk
           ? pt.extractRobotsTxt(robotsBody, ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended'])
           : null,
-        llmsTxt: llmsBody && !isHtml(llmsBody) ? pt.extractLlmsTxt(llmsBody) : null,
+        llmsTxt: llmsOk ? pt.extractLlmsTxt(llmsBody) : null,
         sitemap: null
       };
 
-      checkHtml(html, { site: site, route: target.pathname, label: target.href });
-      els.html.value = html;
+      checkHtml(fetched.body, { site: site, route: target.pathname, label: target.href });
+      els.html.value = fetched.body;
+      rulesStep('ok', 'done');
       setStatus('Checked ' + target.href + '. Edit the HTML below and the report follows along.');
     } catch (err) {
+      pageStep('fail', err.message);
       setStatus(
-        'Could not fetch that page: ' + err.message + '. A browser cannot read another site directly, so this goes through a public CORS proxy that some hosts block. Paste the HTML instead — view source, copy, paste below.',
+        'Could not read that page. A browser cannot fetch another site directly, so this borrows a public proxy, and all of them refused: ' +
+        err.message + '. Paste the page source below instead — that path needs nobody.',
         true
       );
     } finally {
+      scanEnd();
       els.go.disabled = false;
     }
   }
+
+  Array.prototype.forEach.call(document.querySelectorAll('.examples button'), function (b) {
+    b.addEventListener('click', function () {
+      els.url.value = b.dataset.url;
+      checkUrl(b.dataset.url);
+    });
+  });
 
   els.form.addEventListener('submit', function (e) {
     e.preventDefault();
