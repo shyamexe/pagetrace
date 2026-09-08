@@ -184,6 +184,38 @@ describe('broken internal links', () => {
   });
 });
 
+describe('asset links (--verify-all)', () => {
+  const withLinks = `<html><head><title>D</title></head><body>
+    <a href="/there.pdf">there</a><a href="/gone.pdf">gone</a></body></html>`;
+
+  it('skips assets by default, since checking them costs a request each', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pagetrace-assets-'));
+    writeFileSync(join(dir, 'index.html'), withLinks);
+    const snapshot = await snapshotFromDir(dir);
+    expect(snapshot.pages['/'].brokenLinks).toBeUndefined();
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('checks an asset against the filesystem for a build directory', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'pagetrace-assets-'));
+    writeFileSync(join(dir, 'index.html'), withLinks);
+    writeFileSync(join(dir, 'there.pdf'), '%PDF');
+    const snapshot = await snapshotFromDir(dir, { verifyAll: true });
+    expect(snapshot.pages['/'].brokenLinks).toEqual(['/gone.pdf']);
+    rmSync(dir, { recursive: true, force: true });
+  });
+
+  it('checks an asset with a request on a crawl', async () => {
+    stubNetwork({
+      [`${ORIGIN}/sitemap.xml`]: `<urlset><url><loc>${ORIGIN}/a</loc></url></urlset>`,
+      [`${ORIGIN}/a`]: withLinks,
+      [`${ORIGIN}/there.pdf`]: '%PDF',
+    });
+    const snapshot = await snapshotFromOrigin(ORIGIN, { verifyAll: true });
+    expect(snapshot.pages['/a'].brokenLinks).toEqual(['/gone.pdf']);
+  });
+});
+
 describe('snapshotFromPage', () => {
   const post = `<html><head><title>Post</title></head><body>
     <a href="/live">live</a><a href="/dead">dead</a>

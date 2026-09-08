@@ -19,6 +19,33 @@ npm install -D pagetrace
 
 Requires Node 20.19 or newer. No native modules, three small dependencies.
 
+## Commands
+
+| Command | Answers | Crawls | Exit 1 when |
+| --- | --- | --- | --- |
+| `init` | "get me set up" | once, to write the first lockfile | never |
+| `snapshot` | "record what the site looks like now" | whole site | never |
+| `check` | "what did this deploy change?" | whole site | findings at or above `--fail-on` (default `error`) |
+| `audit` | "what is wrong with this site?" | whole site | `--fail-on` (default `never`) |
+| `links` | "are any links dead?" | whole site, links only in the report | any broken link |
+| `page <url>` | "is this one page sound?" | that URL alone | `--fail-on` (default `error`) |
+| `update` | "am I on the latest pagetrace?" | nothing | never |
+
+Every crawling command takes `--dir <build>` or `--url <origin>`, plus:
+
+| Flag | Default | Effect |
+| --- | --- | --- |
+| `--limit <n>` | 200 | Stop after this many pages |
+| `--concurrency <n>` | 5 | Parallel requests |
+| `--external` | off (on for `page`) | Also check links that leave the site |
+| `--verify-all` | off | Also check links to assets — PDFs, images, archives |
+| `--ignore-robots` | off | Crawl paths `robots.txt` disallows |
+| `--fail-on <severity>` | varies | `error`, `warn`, `info` or `never` |
+| `--format <format>` | `pretty` | `pretty`, `json`, `markdown`; `github` and `sarif` on `check` |
+| `--config <file>` | `pagetrace.config.json` | Config file |
+
+Exit codes are the same everywhere: `0` clean, `1` findings at or above `--fail-on`, `2` the run itself failed — bad flags, an unreadable build, an unreachable origin. CI can tell "the site regressed" from "the tool broke".
+
 ## Use
 
 Set up a config file and the first baseline in one step:
@@ -56,7 +83,7 @@ npx pagetrace check --dir ./out
 5 error, 9 warning, 2 info
 ```
 
-Exit codes are `0` for clean, `1` for findings at or above `--fail-on`, and `2` when the run itself failed — bad flags, an unreadable build directory, an unreachable origin. CI can tell "the site regressed" from "the tool broke". `--fail-on` takes `error` (the default), `warn` or `info`, and rejects anything else rather than quietly letting the build pass.
+`--fail-on` rejects an unrecognised value rather than quietly letting the build pass.
 
 Note that `check` runs the absolute rules as well as the diff, so it can fail on a problem your build did not introduce. Use `--no-audit` for a pure regression gate.
 
@@ -193,7 +220,7 @@ Only `404` and `410` count as dead. A `403` from a bot wall, a `429`, a timeout 
 
 Think twice before putting `--external` in `check`. A third party's bad afternoon becomes a diff in your repository and a red build you cannot fix.
 
-Internal links are checked too. Only the broken ones are stored, so a site's navigation never lands in the lockfile: `link.broken` for a link that is already dead, `link.broken.added` for one this build broke. A `--dir` crawl is authoritative — the build directory is the whole site — while a crawl confirms each candidate with a real request first, because a sitemap routinely omits pages that are live. External links are checked only with `--external`, and only a 404 or 410 counts.
+Internal links are checked too. Only the broken ones are stored, so a site's navigation never lands in the lockfile: `link.broken` for a link that is already dead, `link.broken.added` for one this build broke. A `--dir` crawl is authoritative — the build directory is the whole site — while a crawl confirms each candidate with a real request first, because a sitemap routinely omits pages that are live. External links are checked only with `--external`, and only a 404 or 410 counts. Links to assets — PDFs, images, archives — are skipped unless `--verify-all`, since each one costs a request on a crawl (a `--dir` run checks them against the filesystem instead).
 
 Redirects are recorded from the response itself, so they cost no extra requests. A redirect that only adds or drops a trailing slash is server configuration rather than drift and is not reported. `canonical.redirects` is only raised when the canonical's target was actually crawled, so a `--limit` run cannot invent it.
 

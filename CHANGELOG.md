@@ -6,6 +6,21 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.14.0] - 2026-09-08
+
+### Added
+
+- `--verify-all` also checks links to assets — PDFs, images, archives. They are
+  never crawled as pages, so they were skipped entirely: a link to a deleted
+  whitepaper reported nothing. A `--dir` run checks them against the filesystem;
+  a crawl spends a request each, which is why it is opt-in.
+
+### Changed
+
+- Link verification now runs in parallel at `--concurrency`, and the cap rose
+  from 100 to 1000 unique targets. Hitting the cap now says so on stderr rather
+  than silently under-reporting, which read as a clean site.
+
 ## [0.13.0] - 2026-09-08
 
 ### Added
@@ -370,6 +385,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.14.0]: https://github.com/shyamexe/pagetrace/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/shyamexe/pagetrace/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/shyamexe/pagetrace/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/shyamexe/pagetrace/compare/v0.10.0...v0.11.0

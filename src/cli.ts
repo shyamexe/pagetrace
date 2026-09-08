@@ -57,6 +57,7 @@ interface SourceFlags {
   concurrency?: number;
   ignoreRobots?: boolean;
   external?: boolean;
+  verifyAll?: boolean;
 }
 
 const SEVERITIES: Severity[] = ['error', 'warn', 'info'];
@@ -83,7 +84,8 @@ async function loadConfig(path = DEFAULT_CONFIG): Promise<Config> {
 
 async function build(flags: SourceFlags, config: Config): Promise<Snapshot> {
   const checkExternal = flags.external ?? config.checkExternal;
-  if (flags.dir) return snapshotFromDir(flags.dir, { ...config, checkExternal });
+  const verifyAll = flags.verifyAll ?? config.verifyAll;
+  if (flags.dir) return snapshotFromDir(flags.dir, { ...config, checkExternal, verifyAll });
   if (flags.url)
     return snapshotFromOrigin(flags.url, {
       ...config,
@@ -91,6 +93,7 @@ async function build(flags: SourceFlags, config: Config): Promise<Snapshot> {
       concurrency: flags.concurrency,
       ignoreRobots: flags.ignoreRobots ?? config.ignoreRobots,
       checkExternal,
+      verifyAll,
     });
   throw new Error('Provide a source: --dir <build directory> or --url <origin>.');
 }
@@ -120,6 +123,7 @@ cli
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--external', 'Also check links that leave the site')
+  .option('--verify-all', 'Also check links to assets (PDFs, images, archives)')
   .option('--out <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .action(async (flags) => {
@@ -142,6 +146,7 @@ cli
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--external', 'Also check links that leave the site')
+  .option('--verify-all', 'Also check links to assets (PDFs, images, archives)')
   .option('--lockfile <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown | github | sarif', { default: 'pretty' })
@@ -202,6 +207,7 @@ cli
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--external', 'Also check links that leave the site')
+  .option('--verify-all', 'Also check links to assets (PDFs, images, archives)')
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown | html', { default: 'pretty' })
   .option('--out <file>', 'Write the report to a file instead of stdout')
@@ -264,6 +270,7 @@ cli
   // On by default here, unlike a crawl: one page's links are a bounded cost,
   // and "are this page's links dead" is the question being asked.
   .option('--external', 'Check links that leave the site', { default: true })
+  .option('--verify-all', 'Also check links to assets (PDFs, images, archives)')
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown', { default: 'pretty' })
@@ -276,6 +283,7 @@ cli
       ...config,
       concurrency: flags.concurrency,
       checkExternal: flags.external,
+      verifyAll: flags.verifyAll ?? config.verifyAll,
     });
 
     const [page] = Object.values(snapshot.pages);
@@ -328,6 +336,7 @@ cli
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--external', 'Also check links that leave the site')
+  .option('--verify-all', 'Also check links to assets (PDFs, images, archives)')
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .option('--format <format>', 'pretty | json | markdown', { default: 'pretty' })
   .option('--out <file>', 'Write the report to a file instead of stdout')
@@ -403,6 +412,7 @@ cli
   .option('--concurrency <n>', 'Parallel requests', { default: 5 })
   .option('--ignore-robots', 'Crawl paths that robots.txt disallows')
   .option('--external', 'Also check links that leave the site')
+  .option('--verify-all', 'Also check links to assets (PDFs, images, archives)')
   .option('--out <file>', 'Lockfile path', { default: DEFAULT_LOCKFILE })
   .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
   .action(async (flags) => {

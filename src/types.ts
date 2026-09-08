@@ -162,4 +162,9 @@ export interface Config {
    * third party's bad afternoon into a diff in your repository.
    */
   checkExternal?: boolean;
+  /**
+   * Also check links to assets — PDFs, images, archives. They are never crawled
+   * as pages, so each one costs a request (or a filesystem check for --dir).
+   */
+  verifyAll?: boolean;
 }

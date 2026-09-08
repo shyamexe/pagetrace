@@ -1,5 +1,5 @@
 import { execFile } from 'node:child_process';
-import { readdir, readFile } from 'node:fs/promises';
+import { access, readdir, readFile } from 'node:fs/promises';
 import { join, relative, sep } from 'node:path';
 import { promisify } from 'node:util';
 import {
@@ -204,7 +204,20 @@ export async function snapshotFromDir(dir: string, config: Config = {}): Promise
   // A build directory is the whole site, so a link resolving to no file here is
   // broken, with nothing to confirm over the network.
   const origin = site.origin ?? 'https://pagetrace.invalid';
-  await resolveBrokenLinks(pages, links, origin);
+  await resolveBrokenLinks(pages, links, origin, {
+    includeAssets: config.verifyAll,
+    // The HTML route set is authoritative here, so a missing page is simply
+    // broken. An asset is a file this crawl never walked, so it gets a stat.
+    verify: config.verifyAll
+      ? async (target) =>
+          ASSET_PATH.test(target)
+            ? !(await access(join(dir, target)).then(
+                () => true,
+                () => false,
+              ))
+            : true
+      : undefined,
+  });
   if (config.checkExternal) await resolveDeadExternal(pages, links, origin, 5);
 
   return { schemaVersion: 1, createdAt: new Date().toISOString(), site, pages };
@@ -228,7 +241,12 @@ const ASSET_PATH = /\.(?!html?$)[a-z0-9]+$/i;
  * A site serving `/blog` without the trailing slash resolves `contact` to
  * `/contact` instead — rare enough, and absolute hrefs are unaffected.
  */
-function linkTarget(href: string, from: string, origin: string): string | null {
+function linkTarget(
+  href: string,
+  from: string,
+  origin: string,
+  includeAssets = false,
+): string | null {
   let url: URL;
   try {
     url = new URL(href, `${origin}${from === '/' ? '' : from}/`);
@@ -236,8 +254,10 @@ function linkTarget(href: string, from: string, origin: string): string | null {
     return null;
   }
   if (url.origin !== origin) return null;
-  if (ASSET_PATH.test(url.pathname)) return null;
-  return routeFromUrl(url.href);
+  // An asset is never a crawled page, so it can only be checked by asking for
+  // it. Skipped by default for that reason; --verify-all pays the requests.
+  if (!includeAssets && ASSET_PATH.test(url.pathname)) return null;
+  return ASSET_PATH.test(url.pathname) ? url.pathname : routeFromUrl(url.href);
 }
 
 /**
@@ -250,14 +270,23 @@ function linkTarget(href: string, from: string, origin: string): string | null {
  * ponytail: verification is capped, so a site with hundreds of unlisted pages
  * reports only the first MAX_LINK_CHECKS. Raise it if that bites.
  */
-const MAX_LINK_CHECKS = 100;
+const MAX_LINK_CHECKS = 1000;
+
+interface LinkOptions {
+  /** Also resolve links to assets — PDFs, images, archives — which are never crawled. */
+  includeAssets?: boolean;
+  /** Confirms a candidate is genuinely absent. Omitted when the route set is authoritative. */
+  verify?: (target: string) => Promise<boolean>;
+  concurrency?: number;
+}
 
 async function resolveBrokenLinks(
   pages: Record<string, PageFingerprint>,
   links: Record<string, string[]>,
   origin: string,
-  verify?: (route: string) => Promise<boolean>,
+  options: LinkOptions = {},
 ): Promise<void> {
+  const { includeAssets = false, verify, concurrency = 5 } = options;
   const known = new Set(Object.keys(pages));
   const candidates = new Map<string, string[]>();
 
@@ -265,7 +294,7 @@ async function resolveBrokenLinks(
     const missing = [
       ...new Set(
         hrefs
-          .map((href) => linkTarget(href, route, origin))
+          .map((href) => linkTarget(href, route, origin, includeAssets))
           .filter((target): target is string => target !== null && !known.has(target)),
       ),
     ];
@@ -274,10 +303,24 @@ async function resolveBrokenLinks(
 
   const broken = new Set<string>();
   if (verify) {
-    const targets = [...new Set([...candidates.values()].flat())].slice(0, MAX_LINK_CHECKS);
-    for (const target of targets) {
-      if (await verify(target)) broken.add(target);
+    const unique = [...new Set([...candidates.values()].flat())];
+    const queue = unique.slice(0, MAX_LINK_CHECKS);
+    if (unique.length > queue.length) {
+      // Silence here would under-report and read as a clean site.
+      console.error(
+        `pagetrace: ${unique.length} link targets to confirm, checking the first ${MAX_LINK_CHECKS}.`,
+      );
     }
+    // A site-wide nav puts the same target on every page, so targets are
+    // deduplicated first and each is asked about exactly once.
+    await Promise.all(
+      Array.from({ length: Math.min(Math.max(1, concurrency), queue.length) }, async () => {
+        while (queue.length > 0) {
+          const target = queue.shift()!;
+          if (await verify(target)) broken.add(target);
+        }
+      }),
+    );
   }
 
   for (const [route, missing] of candidates) {
@@ -412,12 +455,16 @@ export async function snapshotFromPage(
   const links = { [route]: extractLinks(doc.text) };
   const origin = site.origin ?? target.origin;
 
-  await resolveBrokenLinks(pages, links, origin, async (candidate) => {
-    try {
-      return (await fetchDoc(new URL(candidate, target.origin).href, options.timeout)) === null;
-    } catch {
-      return false;
-    }
+  await resolveBrokenLinks(pages, links, origin, {
+    includeAssets: options.verifyAll,
+    concurrency: options.concurrency,
+    verify: async (candidate) => {
+      try {
+        return (await fetchDoc(new URL(candidate, target.origin).href, options.timeout)) === null;
+      } catch {
+        return false;
+      }
+    },
   });
 
   if (options.checkExternal) {
@@ -574,14 +621,18 @@ export async function snapshotFromOrigin(
 
   // A sitemap is not a site map: pages that are live but unlisted are ordinary,
   // so every candidate is confirmed with a real request before it is reported.
-  await resolveBrokenLinks(pages, links, base.origin, async (route) => {
-    try {
-      return (await fetchDoc(new URL(route, base).href, timeout)) === null;
-    } catch {
-      // Unreachable is not the same as absent, and a flaky response must not
-      // become a finding about the site's links.
-      return false;
-    }
+  await resolveBrokenLinks(pages, links, base.origin, {
+    includeAssets: options.verifyAll,
+    concurrency,
+    verify: async (route) => {
+      try {
+        return (await fetchDoc(new URL(route, base).href, timeout)) === null;
+      } catch {
+        // Unreachable is not the same as absent, and a flaky response must not
+        // become a finding about the site's links.
+        return false;
+      }
+    },
   });
 
   if (options.checkExternal) {
