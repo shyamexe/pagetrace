@@ -59,6 +59,8 @@
   }
 
   * { box-sizing: border-box; }
+  /* A class with display: grid outranks the UA sheet's [hidden] rule. */
+  [hidden] { display: none !important; }
 
   body {
     margin: 0;
@@ -171,6 +173,43 @@
     border: 1px solid var(--line); background: var(--panel); color: var(--ink-2); cursor: pointer;
   }
   .examples button:hover { border-color: var(--accent); color: var(--accent); }
+
+  .scopes { display: flex; border: 1px solid var(--line); border-radius: var(--r); overflow: hidden; width: fit-content; background: var(--panel); margin: 0 0 16px; flex-wrap: wrap; }
+  .scopes button { appearance: none; border: 0; background: transparent; color: var(--ink-2); font-family: var(--ui); font-size: 13px; font-weight: 500; padding: 9px 16px; cursor: pointer; display: flex; align-items: baseline; gap: 8px; }
+  .scopes button + button { border-left: 1px solid var(--line); }
+  .scopes button[aria-pressed="true"] { background: var(--accent); color: #fff; }
+  .scopes button .cmd { font-family: var(--mono); font-size: 11.5px; opacity: .8; }
+
+  form.url-form select {
+    font-family: var(--mono); font-size: 13px;
+    padding: 12px 10px; border-radius: var(--r);
+    border: 1px solid var(--line); background: var(--panel); color: var(--ink);
+  }
+
+  .crawled { display: flex; flex-wrap: wrap; gap: 6px; background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); padding: 14px 16px; }
+  .crawled .heading { font-family: var(--mono); font-size: 11.5px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); width: 100%; margin-bottom: 2px; }
+  .route { font-family: var(--mono); font-size: 12px; border: 1px solid var(--line); border-radius: 100px; padding: 3px 10px; color: var(--ink-2); }
+  .route[data-bad="true"] { color: var(--error); border-color: var(--error); background: var(--error-soft); }
+
+  .issues { display: flex; flex-direction: column; gap: 12px; margin-top: 16px; }
+  .issue { display: grid; grid-template-columns: 3px minmax(0, 1fr); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; animation: rise .32s ease both; }
+  .issue .stripe { background: var(--info); }
+  .issue[data-sev="error"] .stripe { background: var(--error); }
+  .issue[data-sev="warn"] .stripe { background: var(--warn); }
+  .issue-body { padding: 14px 16px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .issue-top { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+  .issue-top .sev { font-family: var(--mono); font-size: 10.5px; font-weight: 600; letter-spacing: .1em; text-transform: uppercase; padding: 2px 6px; border-radius: 3px; color: var(--info); background: var(--info-soft); }
+  .issue[data-sev="error"] .sev { color: var(--error); background: var(--error-soft); }
+  .issue[data-sev="warn"] .sev { color: var(--warn); background: var(--warn-soft); }
+  .issue-top .msg { font-weight: 500; }
+  .issue-top .code-tag { font-family: var(--mono); font-size: 12px; color: var(--ink-3); margin-left: auto; }
+  .issue-where { display: flex; gap: 6px; flex-wrap: wrap; }
+  .issue-why { font-size: 13.5px; color: var(--ink-2); margin: 0; max-width: 68ch; }
+  .issue-fix { font-size: 13.5px; color: var(--ink); margin: 0; max-width: 68ch; display: flex; gap: 7px; }
+  .issue-fix::before { content: "\2192"; color: var(--accent); flex: none; }
+
+  .clean-site { padding: 30px 16px; text-align: center; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
+  .clean-site b { display: block; font-family: var(--mono); color: var(--pass); font-size: 15px; margin-bottom: 4px; font-weight: 600; }
 
   .report { padding-bottom: 60px; }
   .report[data-busy="true"] { opacity: .45; }
@@ -295,13 +334,28 @@
 
 <div class="ask">
   <div class="wrap">
-    <h1>Check a page</h1>
-    <p class="sub">
+    <h1 id="h1">Check a page</h1>
+    <p class="sub" id="sub">
       Twenty-three checks across indexability, content, structured data, social preview and AI search —
       the same rules the pagetrace CLI runs, executing in this tab.
     </p>
+
+    <div class="scopes" role="group" aria-label="What to check">
+      <button id="scope-page" type="button" aria-pressed="true">
+        One page <span class="cmd">pagetrace page</span>
+      </button>
+      <button id="scope-site" type="button" aria-pressed="false">
+        Whole site <span class="cmd">pagetrace audit --url</span>
+      </button>
+    </div>
+
     <form class="url-form" id="form">
-      <input id="url" type="url" placeholder="https://example.com/pricing" aria-label="Page URL to check" autocomplete="url">
+      <input id="url" type="url" placeholder="https://example.com/pricing" aria-label="URL to check" autocomplete="url">
+      <select id="limit" aria-label="Pages to crawl" hidden>
+        <option value="5">5 pages</option>
+        <option value="10" selected>10 pages</option>
+        <option value="20">20 pages</option>
+      </select>
       <button id="go" type="submit">Check page</button>
     </form>
     <div class="examples">
@@ -339,7 +393,7 @@
         <div class="tallies">
           <span class="tally error"><b id="t-error">0</b> must fix</span>
           <span class="tally warn"><b id="t-warn">0</b> worth fixing</span>
-          <span class="tally pass"><b id="t-pass">0</b> passing</span>
+          <span class="tally pass"><b id="t-pass">0</b> <span id="t-pass-label">passing</span></span>
         </div>
         <p class="target" id="target"></p>
       </div>
@@ -347,11 +401,18 @@
 
     <div class="cats" id="cats"></div>
 
+    <div id="site-report" hidden>
+      <div class="crawled" id="crawled"></div>
+      <div class="issues" id="issues"></div>
+    </div>
+
     <div class="cta-cli">
-      <h3>Some checks need a crawl, not a page</h3>
+      <h3>Where the CLI goes further</h3>
       <p>
-        Dead internal and external links, redirect drift, sitemap health, duplicate titles across a site and
-        hreflang reciprocity all need more than one page, so a browser cannot answer them. The CLI can.
+        Whole-site mode crawls a handful of pages through a public proxy, which is enough to show duplicate
+        titles, hreflang gaps, dead links and sitemap health. The CLI crawls the whole sitemap with no proxy
+        in the way, checks outbound links, and — the part no checker can do — diffs today's surface against
+        the one committed last week, so CI fails on what this deploy changed.
       </p>
       <pre>npx pagetrace audit --url https://example.com
 npx pagetrace links --url https://example.com --external</pre>
@@ -458,6 +519,7 @@ npx pagetrace links --url https://example.com --external</pre>
     tError: document.getElementById('t-error'),
     tWarn: document.getElementById('t-warn'),
     tPass: document.getElementById('t-pass'),
+    passLabel: document.getElementById('t-pass-label'),
     cats: document.getElementById('cats')
   };
 
@@ -556,6 +618,7 @@ npx pagetrace links --url https://example.com --external</pre>
     els.tError.textContent = String(counts.error);
     els.tWarn.textContent = String(counts.warn);
     els.tPass.textContent = String(counts.pass);
+    els.passLabel.textContent = 'passing';
     els.target.textContent = opts.label;
 
     els.cats.replaceChildren();
@@ -720,22 +783,47 @@ npx pagetrace links --url https://example.com --external</pre>
    * tried in order and the first that answers with HTML wins, rather than one
    * hard dependency that takes the feature down with it.
    */
-  var PROXIES = [
-    { name: 'r.jina.ai',
+  var reader = function (format) {
+    return {
+      name: 'r.jina.ai',
       url: function (u) { return 'https://r.jina.ai/' + u; },
-      init: { headers: { 'x-return-format': 'html' } } },
-    { name: 'allorigins',
-      url: function (u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); } },
-    { name: 'codetabs',
-      url: function (u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); } }
-  ];
+      init: { headers: { 'x-return-format': format } }
+    };
+  };
 
-  async function fetchThrough(url) {
+  var allorigins = {
+    name: 'allorigins',
+    url: function (u) { return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(u); }
+  };
+
+  var codetabs = {
+    name: 'codetabs',
+    url: function (u) { return 'https://api.codetabs.com/v1/proxy?quest=' + encodeURIComponent(u); }
+  };
+
+  // Pages want rendered HTML. robots.txt and sitemap.xml want their own bytes,
+  // and the reader returns those verbatim in text format — so it leads both
+  // chains rather than the passthroughs, which are the ones prone to being down.
+  var PROXIES = [reader('html'), allorigins, codetabs];
+  var RAW_PROXIES = [reader('text'), allorigins, codetabs];
+
+  /**
+   * `raw` reorders the chain for files that are not pages. r.jina.ai is a
+   * reader: it renders what it fetches, so robots.txt and sitemap.xml come
+   * back as HTML documents and stop looking like themselves. The passthrough
+   * proxies go first for those, and the reader stays as a last resort.
+   */
+  async function fetchThrough(url, options) {
+    var chain = options && options.raw ? RAW_PROXIES : PROXIES;
     var failures = [];
-    for (var i = 0; i < PROXIES.length; i += 1) {
-      var proxy = PROXIES[i];
+    for (var i = 0; i < chain.length; i += 1) {
+      var proxy = chain[i];
       try {
-        var response = await fetch(proxy.url(url), proxy.init || undefined);
+        // A dead proxy hangs rather than refusing, and without a deadline the
+        // whole chain waits on it. Eight seconds is generous for a fetch that
+        // is only relaying one document.
+        var init = Object.assign({ signal: AbortSignal.timeout(8000) }, proxy.init || {});
+        var response = await fetch(proxy.url(url), init);
         if (!response.ok) throw new Error('HTTP ' + response.status);
         var body = await response.text();
         return { body: body, via: proxy.name };
@@ -746,8 +834,8 @@ npx pagetrace links --url https://example.com --external</pre>
     throw new Error('every route failed — ' + failures.join(', '));
   }
 
-  async function fetchText(url) {
-    return (await fetchThrough(url)).body;
+  async function fetchText(url, options) {
+    return (await fetchThrough(url, options)).body;
   }
 
   async function checkUrl(raw) {
@@ -774,12 +862,12 @@ npx pagetrace links --url https://example.com --external</pre>
       var isHtml = function (t) { return t !== null && /<html|<!doctype/i.test(t); };
 
       var robotsStep = scanStep('GET /robots.txt');
-      var robotsBody = await fetchText(new URL('/robots.txt', target).href).catch(function () { return null; });
+      var robotsBody = await fetchText(new URL('/robots.txt', target).href, { raw: true }).catch(function () { return null; });
       var robotsOk = robotsBody !== null && !isHtml(robotsBody);
       robotsStep(robotsOk ? 'ok' : 'skip', robotsOk ? size(robotsBody) : 'not found');
 
       var llmsStep = scanStep('GET /llms.txt');
-      var llmsBody = await fetchText(new URL('/llms.txt', target).href).catch(function () { return null; });
+      var llmsBody = await fetchText(new URL('/llms.txt', target).href, { raw: true }).catch(function () { return null; });
       var llmsOk = llmsBody !== null && !isHtml(llmsBody);
       llmsStep(llmsOk ? 'ok' : 'skip', llmsOk ? size(llmsBody) : 'not found');
 
@@ -810,17 +898,390 @@ npx pagetrace links --url https://example.com --external</pre>
     }
   }
 
+  /* ================= whole-site mode =================
+   *
+   * The same shape as `pagetrace audit --url`: discover routes from the
+   * sitemap, fingerprint each page, then run every rule over the snapshot —
+   * including the cross-page ones a single page cannot answer. Capped low,
+   * because each fetch is somebody else's proxy doing the work.
+   */
+
+  var siteEls = {
+    report: document.getElementById('site-report'),
+    crawled: document.getElementById('crawled'),
+    issues: document.getElementById('issues'),
+    cats: document.getElementById('cats'),
+    limit: document.getElementById('limit'),
+    scopePage: document.getElementById('scope-page'),
+    scopeSite: document.getElementById('scope-site'),
+    h1: document.getElementById('h1'),
+    sub: document.getElementById('sub')
+  };
+
+  var scope = 'page';
+
+  function routeOf(url) {
+    try {
+      var path = new URL(url).pathname.replace(/\/+$/, '');
+      return path === '' ? '/' : path;
+    } catch (err) {
+      return url;
+    }
+  }
+
+  async function crawlSite(target, limit) {
+    var origin = target.origin;
+
+    var robotsStep = scanStep('GET /robots.txt');
+    var robotsBody = await fetchText(origin + '/robots.txt', { raw: true }).catch(function () { return null; });
+    var isHtml = function (t) { return t !== null && /<html|<!doctype/i.test(t); };
+    var robotsOk = robotsBody !== null && !isHtml(robotsBody);
+    var robotsTxt = robotsOk
+      ? pt.extractRobotsTxt(robotsBody, ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended'])
+      : null;
+    robotsStep(robotsOk ? 'ok' : 'skip', robotsOk ? size(robotsBody) : 'not found');
+
+    var llmsStep = scanStep('GET /llms.txt');
+    var llmsBody = await fetchText(origin + '/llms.txt', { raw: true }).catch(function () { return null; });
+    var llmsOk = llmsBody !== null && !isHtml(llmsBody);
+    llmsStep(llmsOk ? 'ok' : 'skip', llmsOk ? size(llmsBody) : 'not found');
+
+    // robots.txt is the authority on where the sitemap lives; the conventional
+    // locations are only a fallback, exactly as the crawler does it.
+    var candidates = (robotsTxt && robotsTxt.sitemaps.length)
+      ? robotsTxt.sitemaps
+      : [origin + '/sitemap.xml', origin + '/sitemap_index.xml', origin + '/wp-sitemap.xml'];
+
+    var sitemapStep = scanStep('Reading the sitemap');
+    var urls = [];
+    var usedSitemap = null;
+    /**
+     * Recovers the URLs when the body is no longer XML. A reader proxy renders
+     * sitemap.xml into a page, which loses <urlset> but keeps every <loc>
+     * value as a visible link — so parse properly first, and fall back to
+     * lifting the same-origin URLs out of whatever came back.
+     */
+    var sitemapUrls = function (body) {
+      var parsed = pt.extractSitemapUrls(body);
+      if (parsed.length > 0) return parsed;
+      var seenUrl = {};
+      return (body.match(/https?:\/\/[^\s"'<>)\]]+/g) || []).filter(function (u) {
+        if (seenUrl[u]) return false;
+        seenUrl[u] = true;
+        try { return new URL(u).origin === origin; } catch (e) { return false; }
+      });
+    };
+
+    for (var i = 0; i < candidates.length && urls.length === 0; i += 1) {
+      var xml = await fetchText(candidates[i], { raw: true }).catch(function () { return null; });
+      if (!xml) continue;
+      var found = sitemapUrls(xml);
+      if (found.length === 0) continue;
+      usedSitemap = candidates[i];
+      // One level of sitemap index, same as the CLI.
+      var nested = found.filter(function (u) { return /\.xml($|\?)/i.test(u); });
+      if (nested.length > 0 && found.length === nested.length) {
+        // A sitemap index points at more sitemaps; follow one level, as the CLI does.
+        for (var n = 0; n < nested.length && urls.length < limit * 3; n += 1) {
+          var child = await fetchText(nested[n], { raw: true }).catch(function () { return null; });
+          if (child) urls = urls.concat(sitemapUrls(child));
+        }
+      } else {
+        urls = found;
+      }
+    }
+
+    urls = urls.filter(function (u) {
+      try { return new URL(u).origin === origin && !/\.xml($|\?)/i.test(u); } catch (e) { return false; }
+    });
+
+    if (urls.length === 0) {
+      sitemapStep('skip', 'none found — checking the one URL');
+      urls = [target.href];
+    } else {
+      sitemapStep('ok', urls.length + ' URLs · ' + routeOf(usedSitemap));
+    }
+
+    var targets = urls.slice(0, limit);
+    var pages = {};
+    var dead = [];
+    var linksByRoute = {};
+
+    for (var t = 0; t < targets.length; t += 1) {
+      var url = targets[t];
+      var route = routeOf(url);
+      var step = scanStep('GET ' + route);
+      try {
+        var doc = await fetchThrough(url);
+        if (!/<html|<head|<body/i.test(doc.body)) throw new Error('not HTML');
+        pages[route] = pt.extractPage(doc.body, route);
+        linksByRoute[route] = pt.extractLinks(doc.body);
+        step('ok', size(doc.body));
+      } catch (err) {
+        // A sitemap URL that will not answer is the sitemap's problem, and it
+        // is a finding in its own right rather than a crawl failure.
+        dead.push(route);
+        step('fail', 'dead');
+      }
+    }
+
+    // Internal links pointing at routes this crawl never saw. Confirming each
+    // one costs a request, so only a handful are checked here — the CLI checks
+    // the lot.
+    var known = {};
+    Object.keys(pages).forEach(function (r) { known[r] = true; });
+    var candidatesToVerify = [];
+    Object.keys(linksByRoute).forEach(function (route) {
+      linksByRoute[route].forEach(function (href) {
+        try {
+          var u = new URL(href, origin + (route === '/' ? '' : route) + '/');
+          if (u.origin !== origin) return;
+          if (/\.(?!html?$)[a-z0-9]+$/i.test(u.pathname)) return;
+          var r = routeOf(u.href);
+          if (known[r]) return;
+          candidatesToVerify.push({ from: route, target: r, href: u.href });
+        } catch (e) { /* not a link we can resolve */ }
+      });
+    });
+
+    var seen = {};
+    var unique = candidatesToVerify.filter(function (c) {
+      if (seen[c.target]) return false;
+      seen[c.target] = true;
+      return true;
+    }).slice(0, 8);
+
+    if (unique.length > 0) {
+      var linkStep = scanStep('Verifying ' + unique.length + ' link targets');
+      var broken = {};
+      for (var v = 0; v < unique.length; v += 1) {
+        var ok = await fetchText(unique[v].href).then(function () { return true; }, function () { return false; });
+        if (!ok) broken[unique[v].target] = true;
+      }
+      candidatesToVerify.forEach(function (c) {
+        if (!broken[c.target] || !pages[c.from]) return;
+        var list = pages[c.from].brokenLinks || (pages[c.from].brokenLinks = []);
+        if (list.indexOf(c.target) === -1) list.push(c.target);
+      });
+      var brokenCount = Object.keys(broken).length;
+      linkStep(brokenCount ? 'fail' : 'ok', brokenCount ? brokenCount + ' dead' : 'all resolve');
+    }
+
+    return {
+      schemaVersion: 1,
+      createdAt: new Date().toISOString(),
+      site: {
+        origin: origin,
+        robotsTxt: robotsTxt,
+        llmsTxt: llmsOk ? pt.extractLlmsTxt(llmsBody) : null,
+        sitemap: { routes: targets.map(routeOf), dead: dead }
+      },
+      pages: pages
+    };
+  }
+
+  function renderSite(snapshot) {
+    var findings = pt.auditSnapshot(snapshot, {});
+    var routes = Object.keys(snapshot.pages);
+    var dead = snapshot.site.sitemap ? snapshot.site.sitemap.dead : [];
+
+    var counts = { error: 0, warn: 0, info: 0 };
+    findings.forEach(function (f) { counts[f.severity] += 1; });
+
+    countTo(scoreOf(findings));
+    els.arc.style.stroke = counts.error > 0 ? 'var(--error)' : counts.warn > 0 ? 'var(--warn)' : 'var(--pass)';
+    els.arc.setAttribute('stroke-dashoffset', String(CIRCUMFERENCE * (1 - scoreOf(findings) / 100)));
+
+    els.verdictTitle.textContent = counts.error > 0
+      ? 'This site has blockers'
+      : counts.warn > 0 ? 'No blockers, some gaps' : 'This site is in good shape';
+    els.verdictText.textContent = routes.length + (routes.length === 1 ? ' page' : ' pages') +
+      ' checked against every rule, including the ones a single page cannot answer: duplicate titles, hreflang reciprocity, dead links and sitemap health.';
+    els.tError.textContent = String(counts.error);
+    els.tWarn.textContent = String(counts.warn);
+    els.tPass.textContent = String(counts.info);
+    els.passLabel.textContent = 'noted';
+    els.target.textContent = snapshot.site.origin;
+
+    // Crawled routes, with the dead sitemap entries called out among them.
+    siteEls.crawled.replaceChildren();
+    var heading = document.createElement('div');
+    heading.className = 'heading';
+    heading.textContent = 'Crawled — ' + routes.length + ' pages' + (dead.length ? ', ' + dead.length + ' dead' : '');
+    siteEls.crawled.appendChild(heading);
+    routes.concat(dead).forEach(function (r) {
+      var chip = document.createElement('span');
+      chip.className = 'route';
+      chip.textContent = r;
+      if (dead.indexOf(r) !== -1) chip.dataset.bad = 'true';
+      siteEls.crawled.appendChild(chip);
+    });
+
+    // Grouped by code and message, which is how the CLI's report aggregates:
+    // one template defect across 40 pages is one issue, not forty.
+    var groups = [];
+    var index = {};
+    findings.forEach(function (f) {
+      var key = f.code + '|' + f.message;
+      if (!index[key]) {
+        index[key] = { code: f.code, message: f.message, severity: f.severity, routes: [] };
+        groups.push(index[key]);
+      }
+      if (f.route && index[key].routes.indexOf(f.route) === -1) index[key].routes.push(f.route);
+    });
+
+    var order = { error: 0, warn: 1, info: 2 };
+    groups.sort(function (a, b) { return order[a.severity] - order[b.severity]; });
+
+    siteEls.issues.replaceChildren();
+    if (groups.length === 0) {
+      var clean = document.createElement('div');
+      clean.className = 'clean-site';
+      var b = document.createElement('b');
+      b.textContent = 'No findings across ' + routes.length + ' pages.';
+      var sub = document.createElement('span');
+      sub.textContent = 'Every rule ran and none of them fired.';
+      clean.append(b, sub);
+      siteEls.issues.appendChild(clean);
+      return;
+    }
+
+    groups.forEach(function (g, i) {
+      var row = document.createElement('div');
+      row.className = 'issue';
+      row.dataset.sev = g.severity;
+      row.style.animationDelay = Math.min(i * 30, 300) + 'ms';
+
+      var stripe = document.createElement('div');
+      stripe.className = 'stripe';
+      var body = document.createElement('div');
+      body.className = 'issue-body';
+
+      var top = document.createElement('div');
+      top.className = 'issue-top';
+      var sev = document.createElement('span');
+      sev.className = 'sev';
+      sev.textContent = g.severity;
+      var msg = document.createElement('span');
+      msg.className = 'msg';
+      msg.textContent = g.message;
+      var code = document.createElement('span');
+      code.className = 'code-tag';
+      code.textContent = g.code;
+      top.append(sev, msg, code);
+      body.appendChild(top);
+
+      if (g.routes.length > 0) {
+        var where = document.createElement('div');
+        where.className = 'issue-where';
+        g.routes.slice(0, 12).forEach(function (r) {
+          var chip = document.createElement('span');
+          chip.className = 'route';
+          chip.textContent = r;
+          where.appendChild(chip);
+        });
+        if (g.routes.length > 12) {
+          var more = document.createElement('span');
+          more.className = 'route';
+          more.textContent = '+' + (g.routes.length - 12) + ' more';
+          where.appendChild(more);
+        }
+        body.appendChild(where);
+      }
+
+      var guide = pt.GUIDANCE[g.code];
+      if (guide) {
+        var why = document.createElement('p');
+        why.className = 'issue-why';
+        why.textContent = guide.why;
+        var fix = document.createElement('p');
+        fix.className = 'issue-fix';
+        fix.textContent = guide.fix;
+        body.append(why, fix);
+      }
+
+      row.append(stripe, body);
+      siteEls.issues.appendChild(row);
+    });
+  }
+
+  async function checkSite(raw) {
+    var target;
+    try {
+      target = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+    } catch (err) {
+      setStatus('That does not look like a URL. Try https://example.com', true);
+      return;
+    }
+
+    var limit = Number(siteEls.limit.value) || 10;
+    els.go.disabled = true;
+    setStatus('');
+    scanStart(limit + 4);
+
+    try {
+      var snapshot = await crawlSite(target, limit);
+      var rulesStep = scanStep('Running every rule');
+      renderSite(snapshot);
+      rulesStep('ok', Object.keys(snapshot.pages).length + ' pages');
+      var n = Object.keys(snapshot.pages).length;
+      setStatus('Checked ' + n + (n === 1 ? ' page of ' : ' pages of ') + target.origin + '.');
+    } catch (err) {
+      setStatus('Could not crawl that site: ' + err.message, true);
+    } finally {
+      scanEnd();
+      els.go.disabled = false;
+    }
+  }
+
+  function setScope(next) {
+    scope = next;
+    siteEls.scopePage.setAttribute('aria-pressed', String(next === 'page'));
+    siteEls.scopeSite.setAttribute('aria-pressed', String(next === 'site'));
+    siteEls.limit.hidden = next !== 'site';
+    siteEls.cats.hidden = next !== 'page';
+    siteEls.report.hidden = next !== 'site';
+    document.querySelector('details.paste').hidden = next !== 'page';
+    els.go.textContent = next === 'site' ? 'Crawl site' : 'Check page';
+    els.url.placeholder = next === 'site' ? 'https://example.com' : 'https://example.com/pricing';
+    siteEls.h1.textContent = next === 'site' ? 'Check a site' : 'Check a page';
+    siteEls.sub.textContent = next === 'site'
+      ? 'Crawls from the sitemap and runs every rule, including the ones one page cannot answer: dead links, duplicate titles, hreflang reciprocity and sitemap health.'
+      : 'Twenty-three checks across indexability, content, structured data, social preview and AI search — the same rules the pagetrace CLI runs, executing in this tab.';
+
+    // The other scope's result must not sit under a heading that no longer
+    // describes it.
+    if (next === 'site' && siteEls.issues.children.length === 0) {
+      els.score.textContent = '—';
+      els.arc.setAttribute('stroke-dashoffset', String(CIRCUMFERENCE));
+      els.verdictTitle.textContent = 'Nothing crawled yet';
+      els.verdictText.textContent = 'Enter a site above. Every page is one request through a public proxy, so start small.';
+      els.tError.textContent = '0';
+      els.tWarn.textContent = '0';
+      els.tPass.textContent = '0';
+      els.target.textContent = '';
+    }
+
+    if (next === 'site' && siteEls.issues.children.length === 0) {
+      setStatus('Enter a site and press Crawl site. Each page is a request through a public proxy, so keep the count low.');
+    }
+  }
+
+  siteEls.scopePage.addEventListener('click', function () { setScope('page'); });
+  siteEls.scopeSite.addEventListener('click', function () { setScope('site'); });
+
   Array.prototype.forEach.call(document.querySelectorAll('.examples button'), function (b) {
     b.addEventListener('click', function () {
       els.url.value = b.dataset.url;
-      checkUrl(b.dataset.url);
+      if (scope === 'site') checkSite(b.dataset.url); else checkUrl(b.dataset.url);
     });
   });
 
   els.form.addEventListener('submit', function (e) {
     e.preventDefault();
     var value = els.url.value.trim();
-    if (value) checkUrl(value);
+    if (!value) return;
+    if (scope === 'site') checkSite(value); else checkUrl(value);
   });
 
   els.html.addEventListener('input', function () {

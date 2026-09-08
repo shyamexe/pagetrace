@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.14.4] - 2026-09-08
+
+### Added
+
+- Whole-site mode in the checker. It crawls from the sitemap the way
+  `pagetrace audit --url` does and runs every rule over the result, so the
+  cross-page findings a single page cannot produce — duplicate titles, hreflang
+  reciprocity, dead internal links, sitemap health — finally appear on the site.
+  Findings are grouped by code and message and list the routes they touch, which
+  is how the CLI's own report aggregates.
+
+### Fixed
+
+- Every request now has an eight-second deadline. A proxy that is down hangs
+  rather than refusing, and the chain sat waiting on it.
+- robots.txt and sitemap.xml were fetched through a reader that renders what it
+  fetches, so they came back as HTML documents and stopped looking like
+  themselves. Those requests now ask for text, and a sitemap whose XML did not
+  survive has its URLs recovered from the body rather than being given up on.
+- Switching scope left the other scope's score standing under a heading that no
+  longer described it.
+
 ## [0.14.3] - 2026-09-08
 
 ### Fixed
@@ -430,6 +452,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.14.4]: https://github.com/shyamexe/pagetrace/compare/v0.14.3...v0.14.4
 [0.14.3]: https://github.com/shyamexe/pagetrace/compare/v0.14.2...v0.14.3
 [0.14.2]: https://github.com/shyamexe/pagetrace/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/shyamexe/pagetrace/compare/v0.14.0...v0.14.1
