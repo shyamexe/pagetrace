@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.14.6] - 2026-09-08
+
+### Added
+
+- A links mode in the checker, matching `pagetrace links --external`. It pulls
+  every href off a page, follows each one, and sorts them into dead, could not
+  tell, and alive — internal and external together, since a dead link is dead
+  whoever owns it. Four requests run at a time; one at a time took the better
+  part of a minute on a page with twenty links.
+
 ## [0.14.5] - 2026-09-08
 
 ### Fixed
@@ -464,6 +474,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.14.6]: https://github.com/shyamexe/pagetrace/compare/v0.14.5...v0.14.6
 [0.14.5]: https://github.com/shyamexe/pagetrace/compare/v0.14.0...v0.14.5
 [0.14.4]: https://github.com/shyamexe/pagetrace/commit/ec2a5e2cd590
 [0.14.3]: https://github.com/shyamexe/pagetrace/commit/c45cfb49e265

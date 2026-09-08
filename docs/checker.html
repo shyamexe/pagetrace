@@ -211,6 +211,37 @@
   .clean-site { padding: 30px 16px; text-align: center; color: var(--ink-2); background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); }
   .clean-site b { display: block; font-family: var(--mono); color: var(--pass); font-size: 15px; margin-bottom: 4px; font-weight: 600; }
 
+  /* ---------- link table ---------- */
+  .link-table { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); overflow: hidden; }
+
+  .link-group-head {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 11px 16px;
+    border-bottom: 1px solid var(--line-soft);
+    background: var(--sunk);
+  }
+  .link-group-head h3 { margin: 0; font-size: 14px; font-weight: 600; }
+  .link-group-head .count { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  .link-row {
+    display: grid;
+    grid-template-columns: 16px minmax(0, 1fr) max-content;
+    gap: 12px; align-items: baseline;
+    padding: 9px 16px;
+    border-bottom: 1px solid var(--line-soft);
+    font-family: var(--mono); font-size: 12.5px;
+  }
+  .link-row:last-child { border-bottom: 0; }
+  .link-row .href { overflow-wrap: anywhere; color: var(--ink-2); }
+  .link-row .verdict { color: var(--ink-3); white-space: nowrap; }
+  .link-row[data-state="dead"] .icon,
+  .link-row[data-state="dead"] .verdict { color: var(--error); }
+  .link-row[data-state="dead"] .href { color: var(--ink); }
+  .link-row[data-state="alive"] .icon { color: var(--pass); }
+  .link-row[data-state="unknown"] .icon,
+  .link-row[data-state="unknown"] .verdict { color: var(--ink-3); }
+  .link-row .icon { font-weight: 600; }
+
   .report { padding-bottom: 60px; }
   .report[data-busy="true"] { opacity: .45; }
   .report { transition: opacity .25s ease; }
@@ -347,6 +378,9 @@
       <button id="scope-site" type="button" aria-pressed="false">
         Whole site <span class="cmd">pagetrace audit --url</span>
       </button>
+      <button id="scope-links" type="button" aria-pressed="false">
+        Links <span class="cmd">pagetrace links --external</span>
+      </button>
     </div>
 
     <form class="url-form" id="form">
@@ -406,16 +440,23 @@
       <div class="issues" id="issues"></div>
     </div>
 
+    <div id="links-report" hidden>
+      <div class="link-table" id="link-table"></div>
+    </div>
+
     <div class="cta-cli">
       <h3>Where the CLI goes further</h3>
       <p>
-        Whole-site mode crawls a handful of pages through a public proxy, which is enough to show duplicate
-        titles, hreflang gaps, dead links and sitemap health. The CLI crawls the whole sitemap with no proxy
-        in the way, checks outbound links, and — the part no checker can do — diffs today's surface against
-        the one committed last week, so CI fails on what this deploy changed.
+        These three modes are three CLI commands with a proxy in the way: <code>page</code>,
+        <code>audit --url</code> and <code>links --external</code>. The CLI runs them without the proxy, over
+        a whole sitemap rather than a handful of pages, with assets and redirect chains included — and does
+        the one thing no checker can, diffing today's surface against the one committed last week so CI
+        fails on what this deploy changed.
       </p>
-      <pre>npx pagetrace audit --url https://example.com
-npx pagetrace links --url https://example.com --external</pre>
+      <pre>npx pagetrace page https://example.com/pricing
+npx pagetrace audit --url https://example.com
+npx pagetrace links --url https://example.com --external --verify-all
+npx pagetrace check --dir ./out --baseline-branch main</pre>
     </div>
   </div>
 </div>
@@ -769,7 +810,7 @@ npx pagetrace links --url https://example.com --external</pre>
 
     // Whatever fails, the line still running is the one that failed. Blaming a
     // fixed step reported the fetch as broken when the rules were.
-    scan.pending = settle;
+    if (!scan.pending) scan.pending = settle;
     return settle;
   }
 
@@ -921,6 +962,8 @@ npx pagetrace links --url https://example.com --external</pre>
     limit: document.getElementById('limit'),
     scopePage: document.getElementById('scope-page'),
     scopeSite: document.getElementById('scope-site'),
+    scopeLinks: document.getElementById('scope-links'),
+    linksReport: document.getElementById('links-report'),
     h1: document.getElementById('h1'),
     sub: document.getElementById('sub')
   };
@@ -1212,6 +1255,166 @@ npx pagetrace links --url https://example.com --external</pre>
     });
   }
 
+  /* ================= links mode =================
+   *
+   * `pagetrace links --external` in a tab: pull every href off the page and
+   * ask whether each one answers. Internal and external alike, because a dead
+   * link is dead whoever owns it — the CLI keeps external checking behind a
+   * flag only because it costs a request each.
+   */
+
+  var MAX_LINKS = 25;
+
+  function classify(href, pageUrl) {
+    try {
+      var u = new URL(href, pageUrl);
+      if (u.protocol !== 'http:' && u.protocol !== 'https:') return null;
+      u.hash = '';
+      return { href: u.href, external: u.origin !== new URL(pageUrl).origin };
+    } catch (err) {
+      return null;
+    }
+  }
+
+  function renderLinks(rows, pageUrl) {
+    var dead = rows.filter(function (r) { return r.state === 'dead'; });
+    var unknown = rows.filter(function (r) { return r.state === 'unknown'; });
+    var alive = rows.filter(function (r) { return r.state === 'alive'; });
+
+    var score = rows.length === 0 ? 100 : Math.max(0, 100 - dead.length * 12);
+    countTo(score);
+    els.arc.style.stroke = dead.length ? 'var(--error)' : unknown.length ? 'var(--warn)' : 'var(--pass)';
+    els.arc.setAttribute('stroke-dashoffset', String(CIRCUMFERENCE * (1 - score / 100)));
+
+    els.verdictTitle.textContent = dead.length
+      ? dead.length + (dead.length === 1 ? ' link is dead' : ' links are dead')
+      : 'Every link answered';
+    els.verdictText.textContent = dead.length
+      ? 'A link to a page that is gone wastes the crawl that follows it and sends readers to a 404. Internal ones are yours to fix outright.'
+      : rows.length + ' links checked on this page, internal and external. Nothing 404s.';
+    els.tError.textContent = String(dead.length);
+    els.tWarn.textContent = String(unknown.length);
+    els.tPass.textContent = String(alive.length);
+    els.passLabel.textContent = 'alive';
+    els.target.textContent = pageUrl;
+
+    var table = document.getElementById('link-table');
+    table.replaceChildren();
+
+    [
+      ['Dead', dead],
+      ['Could not tell', unknown],
+      ['Alive', alive]
+    ].forEach(function (pair) {
+      if (pair[1].length === 0) return;
+
+      var head = document.createElement('div');
+      head.className = 'link-group-head';
+      var h3 = document.createElement('h3');
+      h3.textContent = pair[0];
+      var count = document.createElement('span');
+      count.className = 'count';
+      count.textContent = String(pair[1].length);
+      head.append(h3, count);
+      table.appendChild(head);
+
+      pair[1].forEach(function (r) {
+        var row = document.createElement('div');
+        row.className = 'link-row';
+        row.dataset.state = r.state;
+
+        var icon = document.createElement('span');
+        icon.className = 'icon';
+        icon.textContent = r.state === 'alive' ? '✓' : r.state === 'dead' ? '✗' : '–';
+
+        var href = document.createElement('span');
+        href.className = 'href';
+        href.textContent = r.href;
+
+        var verdict = document.createElement('span');
+        verdict.className = 'verdict';
+        verdict.textContent = (r.external ? 'external' : 'internal') + (r.note ? ' · ' + r.note : '');
+
+        row.append(icon, href, verdict);
+        table.appendChild(row);
+      });
+    });
+  }
+
+  async function checkLinks(raw) {
+    var target;
+    try {
+      target = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+    } catch (err) {
+      setStatus('That does not look like a URL. Try https://example.com/pricing', true);
+      return;
+    }
+
+    els.go.disabled = true;
+    setStatus('');
+    scanStart(2);
+
+    var pageStep = scanStep('GET ' + target.pathname);
+    try {
+      var fetched = await fetchThrough(target.href);
+      if (!/<html|<head|<body/i.test(fetched.body)) throw new Error('not HTML');
+      pageStep('ok', size(fetched.body) + ' · via ' + fetched.via);
+
+      var seenHref = {};
+      var links = pt.extractLinks(fetched.body)
+        .map(function (h) { return classify(h, target.href); })
+        .filter(function (l) {
+          if (!l || seenHref[l.href]) return false;
+          seenHref[l.href] = true;
+          return true;
+        });
+
+      var checking = links.slice(0, MAX_LINKS);
+      scanStart(checking.length + 1);
+      scan.done = 1;
+      // Four at a time. One at a time made a page of twenty links take the
+      // better part of a minute, and these are independent requests.
+      var rows = new Array(checking.length);
+      var next = 0;
+
+      var worker = async function () {
+        while (next < checking.length) {
+          var i = next;
+          next += 1;
+          var link = checking[i];
+          var step = scanStep(link.href.replace(/^https?:\/\//, '').slice(0, 48));
+          try {
+            var body = await fetchText(link.href);
+            // A proxy hands back a 404 page with a 200, so the body carries the
+            // answer the status code no longer does.
+            var missing = /^\s*(404|not found)\b/i.test(body) || /<title>[^<]*404[^<]*<\/title>/i.test(body);
+            rows[i] = { href: link.href, external: link.external, state: missing ? 'dead' : 'alive', note: missing ? '404' : '' };
+            step(missing ? 'fail' : 'ok', missing ? '404' : 'ok');
+          } catch (err) {
+            // Unreachable is not dead: say so rather than inventing a finding.
+            rows[i] = { href: link.href, external: link.external, state: 'unknown', note: 'no answer' };
+            step('skip', 'no answer');
+          }
+        }
+      };
+
+      await Promise.all(Array.from({ length: Math.min(4, checking.length) }, worker));
+
+      renderLinks(rows, target.href);
+      var skipped = links.length - checking.length;
+      setStatus(
+        'Checked ' + checking.length + ' of ' + links.length + ' links on ' + target.href +
+        (skipped > 0 ? '. The rest need the CLI, which has no proxy to be polite to.' : '.')
+      );
+    } catch (err) {
+      if (scan.pending) scan.pending('fail', err.message);
+      setStatus('Could not read that page: ' + err.message, true);
+    } finally {
+      scanEnd();
+      els.go.disabled = false;
+    }
+  }
+
   async function checkSite(raw) {
     var target;
     try {
@@ -1242,46 +1445,80 @@ npx pagetrace links --url https://example.com --external</pre>
     }
   }
 
+  var COPY = {
+    page: {
+      h1: 'Check a page',
+      sub: 'Twenty-three checks across indexability, content, structured data, social preview and AI search — the same rules the pagetrace CLI runs, executing in this tab.',
+      button: 'Check page',
+      placeholder: 'https://example.com/pricing'
+    },
+    site: {
+      h1: 'Check a site',
+      sub: 'Crawls from the sitemap and runs every rule, including the ones one page cannot answer: dead links, duplicate titles, hreflang reciprocity and sitemap health.',
+      button: 'Crawl site',
+      placeholder: 'https://example.com'
+    },
+    links: {
+      h1: 'Check the links',
+      sub: 'Follows every link on the page, internal and external, and reports which ones still answer. A link that is gone wastes the crawl behind it and sends readers to a 404.',
+      button: 'Check links',
+      placeholder: 'https://example.com/blog/a-post'
+    }
+  };
+
   function setScope(next) {
     scope = next;
     siteEls.scopePage.setAttribute('aria-pressed', String(next === 'page'));
     siteEls.scopeSite.setAttribute('aria-pressed', String(next === 'site'));
+    siteEls.scopeLinks.setAttribute('aria-pressed', String(next === 'links'));
     siteEls.limit.hidden = next !== 'site';
     siteEls.cats.hidden = next !== 'page';
     siteEls.report.hidden = next !== 'site';
+    siteEls.linksReport.hidden = next !== 'links';
     document.querySelector('details.paste').hidden = next !== 'page';
-    els.go.textContent = next === 'site' ? 'Crawl site' : 'Check page';
-    els.url.placeholder = next === 'site' ? 'https://example.com' : 'https://example.com/pricing';
-    siteEls.h1.textContent = next === 'site' ? 'Check a site' : 'Check a page';
-    siteEls.sub.textContent = next === 'site'
-      ? 'Crawls from the sitemap and runs every rule, including the ones one page cannot answer: dead links, duplicate titles, hreflang reciprocity and sitemap health.'
-      : 'Twenty-three checks across indexability, content, structured data, social preview and AI search — the same rules the pagetrace CLI runs, executing in this tab.';
+    els.go.textContent = COPY[next].button;
+    els.url.placeholder = COPY[next].placeholder;
+    siteEls.h1.textContent = COPY[next].h1;
+    siteEls.sub.textContent = COPY[next].sub;
 
     // The other scope's result must not sit under a heading that no longer
     // describes it.
-    if (next === 'site' && siteEls.issues.children.length === 0) {
+    var emptyHere = next === 'site'
+      ? siteEls.issues.children.length === 0
+      : next === 'links'
+        ? document.getElementById('link-table').children.length === 0
+        : false;
+
+    if (emptyHere) {
       els.score.textContent = '—';
       els.arc.setAttribute('stroke-dashoffset', String(CIRCUMFERENCE));
-      els.verdictTitle.textContent = 'Nothing crawled yet';
-      els.verdictText.textContent = 'Enter a site above. Every page is one request through a public proxy, so start small.';
+      els.verdictTitle.textContent = next === 'links' ? 'No links checked yet' : 'Nothing crawled yet';
+      els.verdictText.textContent = next === 'links'
+        ? 'Enter a page above. Every link on it is one request through a public proxy, so the first 25 are checked.'
+        : 'Enter a site above. Every page is one request through a public proxy, so start small.';
       els.tError.textContent = '0';
       els.tWarn.textContent = '0';
       els.tPass.textContent = '0';
       els.target.textContent = '';
     }
 
-    if (next === 'site' && siteEls.issues.children.length === 0) {
-      setStatus('Enter a site and press Crawl site. Each page is a request through a public proxy, so keep the count low.');
+    if (emptyHere) {
+      setStatus(next === 'links'
+        ? 'Enter a page and press Check links. Each link costs a request through a public proxy.'
+        : 'Enter a site and press Crawl site. Each page is a request through a public proxy, so keep the count low.');
     }
   }
 
   siteEls.scopePage.addEventListener('click', function () { setScope('page'); });
   siteEls.scopeSite.addEventListener('click', function () { setScope('site'); });
+  siteEls.scopeLinks.addEventListener('click', function () { setScope('links'); });
 
   Array.prototype.forEach.call(document.querySelectorAll('.examples button'), function (b) {
     b.addEventListener('click', function () {
       els.url.value = b.dataset.url;
-      if (scope === 'site') checkSite(b.dataset.url); else checkUrl(b.dataset.url);
+      if (scope === 'site') checkSite(b.dataset.url);
+      else if (scope === 'links') checkLinks(b.dataset.url);
+      else checkUrl(b.dataset.url);
     });
   });
 
@@ -1289,7 +1526,9 @@ npx pagetrace links --url https://example.com --external</pre>
     e.preventDefault();
     var value = els.url.value.trim();
     if (!value) return;
-    if (scope === 'site') checkSite(value); else checkUrl(value);
+    if (scope === 'site') checkSite(value);
+    else if (scope === 'links') checkLinks(value);
+    else checkUrl(value);
   });
 
   els.html.addEventListener('input', function () {
