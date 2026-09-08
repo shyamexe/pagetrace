@@ -6,6 +6,23 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.14.2] - 2026-09-08
+
+### Added
+
+- An SEO checker page on the website: enter a URL and get all twenty-three
+  page-level checks scored and grouped, passes shown alongside failures. It
+  fetches robots.txt and llms.txt too, so the site-level checks answer from
+  evidence; anything not fetched reads "not checked" rather than passing or
+  failing.
+
+### Fixed
+
+- `npm run build:site` wrote into `docs/`, which tsup cleans, so building the
+  site deleted the site. Its output now has its own directory, `docs/assets/`,
+  which is the only thing the build can remove. The Pages deploy would have
+  published a lone JavaScript file.
+
 ## [0.14.1] - 2026-09-08
 
 ### Added
@@ -395,6 +412,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.14.2]: https://github.com/shyamexe/pagetrace/compare/v0.14.1...v0.14.2
 [0.14.1]: https://github.com/shyamexe/pagetrace/compare/v0.14.0...v0.14.1
 [0.14.0]: https://github.com/shyamexe/pagetrace/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/shyamexe/pagetrace/compare/v0.12.0...v0.13.0

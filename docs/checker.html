@@ -1,0 +1,636 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SEO checker — pagetrace</title>
+<meta name="description" content="Check any page's SEO, structured data, social tags and AI-search readiness. Twenty-three checks from the pagetrace rule engine, run in your browser.">
+<link rel="canonical" href="https://shyamexe.github.io/pagetrace/checker.html">
+<meta property="og:title" content="SEO checker — pagetrace">
+<meta property="og:description" content="Twenty-three checks against any page: indexability, content, structured data, social, AI search. Runs in your browser.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://shyamexe.github.io/pagetrace/checker.html">
+<script type="application/ld+json">
+{"@context":"https://schema.org","@type":"WebApplication","name":"pagetrace SEO checker","applicationCategory":"DeveloperApplication","operatingSystem":"Any","offers":{"@type":"Offer","price":"0","priceCurrency":"USD"},"author":{"@type":"Person","name":"Shyam","url":"https://www.shyamjith.in/"}}
+</script>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Instrument+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500;600&display=swap">
+<style>
+  :root {
+    --paper: #f3f5f6; --panel: #ffffff; --sunk: #e8ecee;
+    --line: #d3dadd; --line-soft: #e3e8ea;
+    --ink: #141b1f; --ink-2: #47575f; --ink-3: #71838c;
+    --accent: #0d6e69; --accent-soft: #d9eceb;
+    --error: #c8362c; --error-soft: #fbe6e3;
+    --warn: #a86616; --warn-soft: #fbeedb;
+    --info: #5a6b78; --info-soft: #e7ecef;
+    --pass: #0d6e69; --pass-soft: #d9eceb;
+    --ui: "Instrument Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    --r: 6px;
+    --shadow: 0 1px 2px rgba(20,27,31,.06), 0 8px 24px -16px rgba(20,27,31,.28);
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --paper: #0f1418; --panel: #151d22; --sunk: #111a1f;
+      --line: #26333a; --line-soft: #1e2a30;
+      --ink: #e2eaec; --ink-2: #a3b3ba; --ink-3: #75888f;
+      --accent: #4fbdb3; --accent-soft: #123430;
+      --error: #f08076; --error-soft: #3a1c19;
+      --warn: #e0a75c; --warn-soft: #362614;
+      --info: #93a6b1; --info-soft: #1c262c;
+      --pass: #4fbdb3; --pass-soft: #123430;
+      --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+    }
+  }
+
+  :root[data-theme="dark"] {
+    --paper: #0f1418; --panel: #151d22; --sunk: #111a1f;
+    --line: #26333a; --line-soft: #1e2a30;
+    --ink: #e2eaec; --ink-2: #a3b3ba; --ink-3: #75888f;
+    --accent: #4fbdb3; --accent-soft: #123430;
+    --error: #f08076; --error-soft: #3a1c19;
+    --warn: #e0a75c; --warn-soft: #362614;
+    --info: #93a6b1; --info-soft: #1c262c;
+    --pass: #4fbdb3; --pass-soft: #123430;
+    --shadow: 0 1px 2px rgba(0,0,0,.4), 0 8px 24px -16px rgba(0,0,0,.8);
+  }
+
+  * { box-sizing: border-box; }
+
+  body {
+    margin: 0;
+    background: var(--paper);
+    color: var(--ink);
+    font-family: var(--ui);
+    font-size: 15px;
+    line-height: 1.55;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  a { color: var(--accent); }
+  .wrap { max-width: 1080px; margin: 0 auto; padding: 0 24px; }
+
+  .topbar { border-bottom: 1px solid var(--line); background: var(--panel); }
+  .topbar .wrap { display: flex; align-items: center; gap: 20px; padding-top: 12px; padding-bottom: 12px; flex-wrap: wrap; }
+  .mark { font-family: var(--mono); font-weight: 600; font-size: 17px; letter-spacing: -0.02em; color: var(--ink); text-decoration: none; display: flex; align-items: center; gap: 2px; }
+  .caret { width: 9px; height: 17px; background: var(--accent); display: inline-block; animation: blink 1.3s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  .topnav { display: flex; gap: 18px; margin-left: auto; flex-wrap: wrap; align-items: center; }
+  .topnav a { color: var(--ink-2); text-decoration: none; font-size: 14px; }
+  .topnav a:hover { color: var(--accent); }
+  .topnav a[aria-current="page"] { color: var(--accent); font-weight: 500; }
+
+  .ask { padding: 40px 0 28px; }
+  h1 { font-size: clamp(26px, 3.4vw, 34px); letter-spacing: -0.025em; margin: 0 0 8px; font-weight: 600; text-wrap: balance; }
+  .ask p.sub { color: var(--ink-2); margin: 0 0 20px; max-width: 62ch; }
+
+  form.url-form { display: flex; gap: 8px; flex-wrap: wrap; }
+  form.url-form input {
+    flex: 1 1 320px; min-width: 0;
+    font-family: var(--mono); font-size: 14px;
+    padding: 12px 14px;
+    border: 1px solid var(--line); border-radius: var(--r);
+    background: var(--panel); color: var(--ink);
+  }
+  form.url-form input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+  form.url-form button {
+    font-family: var(--ui); font-size: 14px; font-weight: 500;
+    padding: 12px 22px; border-radius: var(--r);
+    border: 1px solid var(--accent); background: var(--accent); color: #fff; cursor: pointer;
+  }
+  form.url-form button:disabled { opacity: .55; cursor: default; }
+
+  .status { margin: 10px 0 0; font-size: 13.5px; color: var(--ink-3); max-width: 72ch; }
+  .status.err { color: var(--error); }
+
+  details.paste { margin: 14px 0 0; }
+  details.paste > summary { cursor: pointer; font-size: 13.5px; color: var(--ink-2); }
+  details.paste textarea {
+    width: 100%; margin-top: 10px;
+    border: 1px solid var(--line); border-radius: var(--r);
+    background: var(--panel); color: var(--ink);
+    font-family: var(--mono); font-size: 12.5px; line-height: 1.6; padding: 12px 14px;
+    resize: vertical;
+  }
+  details.paste textarea:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+  .report { padding-bottom: 60px; }
+  .report .wrap { display: flex; flex-direction: column; gap: 20px; }
+
+  .scoreboard {
+    display: grid;
+    grid-template-columns: max-content minmax(0, 1fr);
+    gap: 28px;
+    align-items: center;
+    background: var(--panel);
+    border: 1px solid var(--line);
+    border-radius: var(--r);
+    box-shadow: var(--shadow);
+    padding: 22px 24px;
+  }
+  @media (max-width: 680px) { .scoreboard { grid-template-columns: minmax(0, 1fr); gap: 18px; } }
+
+  .ring { position: relative; width: 128px; height: 128px; }
+  .ring svg { transform: rotate(-90deg); display: block; }
+  .ring .num {
+    position: absolute; inset: 0;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    font-family: var(--mono); font-variant-numeric: tabular-nums;
+  }
+  .ring .num b { font-size: 32px; font-weight: 600; line-height: 1; }
+  .ring .num span { font-size: 11px; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); margin-top: 4px; }
+
+  .verdict h2 { font-size: 20px; margin: 0 0 6px; font-weight: 600; }
+  .verdict p.said { margin: 0 0 14px; color: var(--ink-2); max-width: 60ch; }
+  .verdict .target { font-family: var(--mono); font-size: 12.5px; color: var(--ink-3); overflow-wrap: anywhere; margin: 12px 0 0; }
+
+  .tallies { display: flex; gap: 8px; flex-wrap: wrap; }
+  .tally {
+    font-family: var(--mono); font-size: 12.5px;
+    border: 1px solid var(--line); border-radius: 100px;
+    padding: 3px 11px; color: var(--ink-2);
+    display: flex; align-items: center; gap: 7px;
+  }
+  .tally b { font-weight: 600; }
+  .tally.error { color: var(--error); border-color: var(--error); background: var(--error-soft); }
+  .tally.warn { color: var(--warn); border-color: var(--warn); background: var(--warn-soft); }
+  .tally.pass { color: var(--pass); border-color: var(--pass); background: var(--pass-soft); }
+
+  .cats { display: grid; grid-template-columns: repeat(auto-fit, minmax(330px, 1fr)); gap: 16px; align-items: start; }
+
+  .cat { background: var(--panel); border: 1px solid var(--line); border-radius: var(--r); box-shadow: var(--shadow); display: flex; flex-direction: column; }
+  .cat-head { display: flex; align-items: baseline; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line-soft); }
+  .cat-head h3 { font-size: 15px; margin: 0; font-weight: 600; }
+  .cat-head .count { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+
+  .check { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 10px; padding: 11px 16px; border-bottom: 1px solid var(--line-soft); align-items: start; }
+  .check:last-child { border-bottom: 0; }
+
+  .icon { font-family: var(--mono); font-size: 13px; line-height: 1.5; font-weight: 600; }
+  .check[data-state="pass"] .icon { color: var(--pass); }
+  .check[data-state="error"] .icon { color: var(--error); }
+  .check[data-state="warn"] .icon { color: var(--warn); }
+  .check[data-state="info"] .icon { color: var(--info); }
+  .check[data-state="unknown"] .icon { color: var(--ink-3); }
+
+  .check-main { min-width: 0; display: flex; flex-direction: column; gap: 5px; }
+  .check-label { display: flex; gap: 10px; align-items: baseline; flex-wrap: wrap; }
+  .check-label .name { font-size: 14px; }
+  .check[data-state="pass"] .name { color: var(--ink-2); }
+  .check-label .codes { font-family: var(--mono); font-size: 11.5px; color: var(--ink-3); }
+  .check-detail { font-size: 13px; color: var(--ink-2); margin: 0; max-width: 60ch; }
+  .check-value { font-family: var(--mono); font-size: 12px; background: var(--sunk); border-radius: 4px; padding: 6px 8px; color: var(--ink-2); overflow-x: auto; }
+  .check-fix { font-size: 13px; color: var(--ink); display: flex; gap: 7px; margin: 0; max-width: 60ch; }
+  .check-fix::before { content: "\2192"; color: var(--accent); flex: none; }
+
+  .cta-cli {
+    background: var(--panel); border: 1px solid var(--line);
+    border-left: 3px solid var(--accent); border-radius: var(--r);
+    padding: 16px 18px;
+  }
+  .cta-cli h3 { margin: 0 0 6px; font-size: 15px; }
+  .cta-cli p { margin: 0 0 10px; color: var(--ink-2); font-size: 14px; max-width: 70ch; }
+  .cta-cli pre { margin: 0; font-family: var(--mono); font-size: 12.5px; background: var(--sunk); border-radius: 4px; padding: 10px 12px; overflow-x: auto; }
+
+  footer { border-top: 1px solid var(--line); padding: 24px 0 50px; color: var(--ink-3); font-size: 13.5px; }
+  footer .wrap { display: flex; gap: 10px 24px; flex-wrap: wrap; flex-direction: row; }
+  footer a { color: var(--ink-2); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
+</style>
+</head>
+<body>
+
+<div class="topbar">
+  <div class="wrap">
+    <a class="mark" href="./">pagetrace<span class="caret"></span></a>
+    <nav class="topnav">
+      <a href="./">Home</a>
+      <a href="./checker.html" aria-current="page">SEO checker</a>
+      <a href="./#playground">Playground</a>
+      <a href="https://github.com/shyamexe/pagetrace">GitHub</a>
+      <a href="https://www.npmjs.com/package/pagetrace">npm</a>
+    </nav>
+  </div>
+</div>
+
+<div class="ask">
+  <div class="wrap">
+    <h1>Check a page</h1>
+    <p class="sub">
+      Twenty-three checks across indexability, content, structured data, social preview and AI search —
+      the same rules the pagetrace CLI runs, executing in this tab.
+    </p>
+    <form class="url-form" id="form">
+      <input id="url" type="url" placeholder="https://example.com/pricing" aria-label="Page URL to check" autocomplete="url">
+      <button id="go" type="submit">Check page</button>
+    </form>
+    <p class="status" id="status"></p>
+    <details class="paste">
+      <summary>Or paste the HTML instead — nothing leaves your browser</summary>
+      <textarea id="html" rows="10" spellcheck="false"></textarea>
+    </details>
+  </div>
+</div>
+
+<div class="report">
+  <div class="wrap">
+    <div class="scoreboard">
+      <div class="ring">
+        <svg width="128" height="128" viewBox="0 0 128 128" aria-hidden="true">
+          <circle cx="64" cy="64" r="56" fill="none" stroke="var(--sunk)" stroke-width="12"></circle>
+          <circle id="ring-arc" cx="64" cy="64" r="56" fill="none" stroke="var(--pass)" stroke-width="12"
+                  stroke-linecap="round" stroke-dasharray="351.86" stroke-dashoffset="352"></circle>
+        </svg>
+        <div class="num"><b id="score">—</b><span>score</span></div>
+      </div>
+      <div class="verdict">
+        <h2 id="verdict-title">Checking…</h2>
+        <p class="said" id="verdict-text"></p>
+        <div class="tallies">
+          <span class="tally error"><b id="t-error">0</b> must fix</span>
+          <span class="tally warn"><b id="t-warn">0</b> worth fixing</span>
+          <span class="tally pass"><b id="t-pass">0</b> passing</span>
+        </div>
+        <p class="target" id="target"></p>
+      </div>
+    </div>
+
+    <div class="cats" id="cats"></div>
+
+    <div class="cta-cli">
+      <h3>Some checks need a crawl, not a page</h3>
+      <p>
+        Dead internal and external links, redirect drift, sitemap health, duplicate titles across a site and
+        hreflang reciprocity all need more than one page, so a browser cannot answer them. The CLI can.
+      </p>
+      <pre>npx pagetrace audit --url https://example.com
+npx pagetrace links --url https://example.com --external</pre>
+    </div>
+  </div>
+</div>
+
+<footer>
+  <div class="wrap">
+    <span>Checks run locally — <a href="https://github.com/shyamexe/pagetrace">pagetrace</a> by <a href="https://www.shyamjith.in/">Shyam</a></span>
+    <span>MIT licensed</span>
+    <span><a href="https://www.npmjs.com/package/pagetrace">npm i -D pagetrace</a></span>
+  </div>
+</footer>
+
+<script src="./assets/browser.global.js"></script>
+<script>
+(function () {
+  var pt = window.pagetrace;
+
+  /**
+   * The checklist is this page's contract with the reader: every row appears
+   * whether it passed or failed, because "we looked at 23 things and 20 are
+   * fine" is the answer people came for. Each row names the finding codes that
+   * make it fail, so a result here maps onto what the CLI reports.
+   */
+  var CHECKS = [
+    { cat: 'Indexability', name: 'Has a canonical URL', codes: ['canonical.missing'],
+      value: function (p) { return p.canonical; } },
+    { cat: 'Indexability', name: 'Canonical stays on this site', codes: ['canonical.offsite', 'canonical.crosspath'] },
+    { cat: 'Indexability', name: 'Page is indexable', codes: ['robots.noindex'],
+      value: function (p) { return p.robots || 'no robots directive — indexable by default'; } },
+
+    { cat: 'Content', name: 'Has a title', codes: ['title.missing'],
+      value: function (p) { return p.title; } },
+    { cat: 'Content', name: 'Title fits in results', codes: ['title.long'],
+      value: function (p) { return p.title ? p.title.length + ' characters' : null; } },
+    { cat: 'Content', name: 'Has a meta description', codes: ['description.missing'],
+      value: function (p) { return p.description; } },
+    { cat: 'Content', name: 'Exactly one h1', codes: ['h1.missing', 'h1.multiple'],
+      value: function (p) { return p.h1.join(' / '); } },
+    { cat: 'Content', name: 'Enough content to rank', codes: ['content.thin'],
+      value: function (p) { return p.wordCount + ' words'; } },
+    { cat: 'Content', name: 'Images have alt text', codes: ['images.alt.missing'],
+      value: function (p) { return p.images.total + ' images, ' + p.images.missingAlt + ' without alt'; } },
+
+    { cat: 'Structured data', name: 'Has JSON-LD', codes: ['jsonld.missing'],
+      value: function (p) { return p.jsonLd.map(function (e) { return e.type; }).join(', '); } },
+    { cat: 'Structured data', name: 'JSON-LD parses', codes: ['jsonld.invalid'] },
+    { cat: 'Structured data', name: 'Required properties present', codes: ['jsonld.required.missing'] },
+    { cat: 'Structured data', name: 'One-of properties satisfied', codes: ['jsonld.oneof.missing'] },
+    { cat: 'Structured data', name: 'Recommended properties present', codes: ['jsonld.recommended.missing'] },
+
+    { cat: 'Social preview', name: 'og:title', codes: ['og.title.missing'],
+      value: function (p) { return p.og['og:title']; } },
+    { cat: 'Social preview', name: 'og:image', codes: ['og.image.missing'],
+      value: function (p) { return p.og['og:image']; } },
+
+    { cat: 'AI search', name: 'Opens with a quotable answer', codes: ['aeo.lead.missing', 'aeo.lead.long'],
+      value: function (p) { return p.leadAnswerWords + ' words in the opening paragraph'; } },
+    { cat: 'AI search', name: 'AI crawlers allowed', codes: ['aeo.crawler.blocked'], site: true },
+    { cat: 'AI search', name: 'Has an llms.txt', codes: ['aeo.llmstxt.missing'], site: true },
+
+    { cat: 'Site files', name: 'Has a robots.txt', codes: ['robotstxt.missing'], site: true },
+    { cat: 'Site files', name: 'robots.txt declares a sitemap', codes: ['robotstxt.sitemap.missing'], site: true },
+    { cat: 'Site files', name: 'Sitemap URLs resolve', codes: ['sitemap.dead'], crawl: true },
+    { cat: 'Site files', name: 'Sitemap URLs answer directly', codes: ['sitemap.redirect'], crawl: true }
+  ];
+
+  // A page with real gaps, so the report shows what it does before anyone types.
+  var SAMPLE = [
+    '<!doctype html>',
+    '<html lang="en">',
+    '<head>',
+    '  <meta charset="utf-8">',
+    '  <title>Northwind Bakery — Sourdough baked daily in Kochi</title>',
+    '  <meta name="description" content="A neighbourhood bakery in Kochi. Sourdough, croissants and cardamom buns, baked fresh every morning.">',
+    '  <meta property="og:title" content="Northwind Bakery">',
+    '  <script type="application/ld+json">',
+    '  {"@context":"https://schema.org","@type":"Bakery","name":"Northwind Bakery","address":{"@type":"PostalAddress","addressLocality":"Kochi"}}',
+    '  <\/script>',
+    '</head>',
+    '<body>',
+    '  <h1>Sourdough baked daily in Kochi</h1>',
+    '  <p>Northwind Bakery has been baking naturally leavened sourdough in Fort Kochi since 2011, using a starter kept alive for over a decade and flour milled in Kerala.</p>',
+    '  <h2>What we bake</h2>',
+    '  <p>Sourdough loaves come out of the oven at seven each morning, followed by croissants at eight and cardamom buns by nine. Everything is made the same day it is sold.</p>',
+    '  <img src="/shopfront.jpg">',
+    '</body>',
+    '</html>'
+  ].join('\n');
+
+  var els = {
+    form: document.getElementById('form'),
+    url: document.getElementById('url'),
+    go: document.getElementById('go'),
+    status: document.getElementById('status'),
+    html: document.getElementById('html'),
+    score: document.getElementById('score'),
+    arc: document.getElementById('ring-arc'),
+    verdictTitle: document.getElementById('verdict-title'),
+    verdictText: document.getElementById('verdict-text'),
+    target: document.getElementById('target'),
+    tError: document.getElementById('t-error'),
+    tWarn: document.getElementById('t-warn'),
+    tPass: document.getElementById('t-pass'),
+    cats: document.getElementById('cats')
+  };
+
+  var CIRCUMFERENCE = 351.86;
+
+  function setStatus(text, isError) {
+    els.status.textContent = text || '';
+    els.status.classList.toggle('err', Boolean(isError));
+  }
+
+  /**
+   * Indicative, and labelled as such on the page: an error costs 12, a warning
+   * 5. It exists so you can watch a page improve as you fix things — not as a
+   * ranking prediction, which nobody outside a search engine can offer.
+   */
+  function scoreOf(findings) {
+    var lost = 0;
+    findings.forEach(function (f) {
+      lost += f.severity === 'error' ? 12 : f.severity === 'warn' ? 5 : 0;
+    });
+    return Math.max(0, 100 - lost);
+  }
+
+  function verdictFor(score, errors) {
+    if (errors > 0) {
+      return ['Something here costs you traffic',
+        'Errors change whether a page can rank or be understood at all. Fix those first — the warnings can wait for a quieter afternoon.'];
+    }
+    if (score >= 90) {
+      return ['This page is in good shape',
+        'Nothing blocking. What is left are refinements: worth doing, not worth a rollback.'];
+    }
+    return ['No blockers, but real gaps',
+      'Nothing here stops the page ranking. The warnings are the difference between appearing and appearing well.'];
+  }
+
+  function render(page, findings, opts) {
+    var byCode = {};
+    findings.forEach(function (f) {
+      if (!byCode[f.code]) byCode[f.code] = [];
+      byCode[f.code].push(f);
+    });
+
+    var counts = { error: 0, warn: 0, pass: 0 };
+    var order = [];
+    var byCat = {};
+
+    CHECKS.forEach(function (check) {
+      // A site-level check needs robots.txt or llms.txt; a crawl-level one needs
+      // a whole sitemap. Where those were never fetched the honest answer is
+      // "not checked" — never a pass, and never a failure.
+      var unknown = check.crawl || (check.site && !opts.siteFetched);
+
+      var hit = null;
+      for (var i = 0; i < check.codes.length && !hit; i += 1) {
+        if (byCode[check.codes[i]]) hit = byCode[check.codes[i]][0];
+      }
+
+      var state = unknown ? 'unknown' : hit ? hit.severity : 'pass';
+      if (state === 'error') counts.error += 1;
+      else if (state === 'warn') counts.warn += 1;
+      else if (state === 'pass') counts.pass += 1;
+
+      if (!byCat[check.cat]) { byCat[check.cat] = []; order.push(check.cat); }
+      byCat[check.cat].push({ check: check, state: state, finding: hit });
+    });
+
+    var score = scoreOf(findings);
+    els.score.textContent = String(score);
+    els.arc.style.stroke = counts.error > 0 ? 'var(--error)' : score >= 90 ? 'var(--pass)' : 'var(--warn)';
+    els.arc.setAttribute('stroke-dashoffset', String(CIRCUMFERENCE * (1 - score / 100)));
+
+    var verdict = verdictFor(score, counts.error);
+    els.verdictTitle.textContent = verdict[0];
+    els.verdictText.textContent = verdict[1];
+    els.tError.textContent = String(counts.error);
+    els.tWarn.textContent = String(counts.warn);
+    els.tPass.textContent = String(counts.pass);
+    els.target.textContent = opts.label;
+
+    els.cats.replaceChildren();
+    order.forEach(function (name) {
+      var rows = byCat[name];
+      var card = document.createElement('section');
+      card.className = 'cat';
+
+      var head = document.createElement('div');
+      head.className = 'cat-head';
+      var h3 = document.createElement('h3');
+      h3.textContent = name;
+      var count = document.createElement('span');
+      count.className = 'count';
+      var passed = rows.filter(function (r) { return r.state === 'pass'; }).length;
+      var checked = rows.filter(function (r) { return r.state !== 'unknown'; }).length;
+      count.textContent = checked === 0 ? 'not checked' : passed + '/' + checked;
+      head.append(h3, count);
+      card.appendChild(head);
+
+      rows.forEach(function (row) {
+        var el = document.createElement('div');
+        el.className = 'check';
+        el.dataset.state = row.state;
+
+        var icon = document.createElement('span');
+        icon.className = 'icon';
+        icon.textContent = row.state === 'pass' ? '✓' : row.state === 'unknown' ? '–' : '✗';
+
+        var main = document.createElement('div');
+        main.className = 'check-main';
+
+        var label = document.createElement('div');
+        label.className = 'check-label';
+        var nm = document.createElement('span');
+        nm.className = 'name';
+        nm.textContent = row.check.name;
+        var codes = document.createElement('span');
+        codes.className = 'codes';
+        codes.textContent = row.finding ? row.finding.code : row.check.codes[0];
+        label.append(nm, codes);
+        main.appendChild(label);
+
+        if (row.state === 'unknown') {
+          var un = document.createElement('p');
+          un.className = 'check-detail';
+          un.textContent = row.check.crawl
+            ? 'Needs a crawl of the whole sitemap — the CLI answers this one.'
+            : 'Not checked: robots.txt and llms.txt were never fetched for pasted HTML.';
+          main.appendChild(un);
+        }
+
+        if (row.finding) {
+          var detail = document.createElement('p');
+          detail.className = 'check-detail';
+          detail.textContent = row.finding.message;
+          main.appendChild(detail);
+
+          var g = pt.GUIDANCE[row.finding.code];
+          if (g) {
+            var fix = document.createElement('p');
+            fix.className = 'check-fix';
+            fix.textContent = g.fix;
+            main.appendChild(fix);
+          }
+        } else if (row.state === 'pass' && row.check.value) {
+          var v = row.check.value(page);
+          if (v) {
+            var val = document.createElement('div');
+            val.className = 'check-value';
+            val.textContent = v;
+            main.appendChild(val);
+          }
+        }
+
+        el.append(icon, main);
+        card.appendChild(el);
+      });
+
+      els.cats.appendChild(card);
+    });
+  }
+
+  function checkHtml(html, opts) {
+    var page = pt.extractPage(html, opts.route || '/');
+    var findings = pt.auditPage(page, {});
+
+    if (opts.site) {
+      var snapshot = {
+        schemaVersion: 1,
+        createdAt: new Date().toISOString(),
+        site: opts.site,
+        pages: {}
+      };
+      snapshot.pages[page.route] = page;
+      findings = findings.concat(pt.auditSite(snapshot));
+    }
+
+    render(page, findings, { siteFetched: Boolean(opts.site), label: opts.label });
+  }
+
+  function proxied(url) {
+    return 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url);
+  }
+
+  async function fetchText(url) {
+    var response = await fetch(proxied(url));
+    if (!response.ok) throw new Error('the proxy answered ' + response.status);
+    return await response.text();
+  }
+
+  async function checkUrl(raw) {
+    var target;
+    try {
+      target = new URL(/^https?:\/\//i.test(raw) ? raw : 'https://' + raw);
+    } catch (err) {
+      setStatus('That does not look like a URL. Try https://example.com/pricing', true);
+      return;
+    }
+
+    els.go.disabled = true;
+    setStatus('Fetching ' + target.href + ' …');
+
+    try {
+      var html = await fetchText(target.href);
+      if (!/<html|<head|<body/i.test(html)) throw new Error('that response was not HTML');
+
+      setStatus('Reading robots.txt and llms.txt …');
+      // Fetched so the site-level checks answer from evidence. A miss here
+      // means "not checked", which is not the same as "missing".
+      var robotsBody = await fetchText(new URL('/robots.txt', target).href).catch(function () { return null; });
+      var llmsBody = await fetchText(new URL('/llms.txt', target).href).catch(function () { return null; });
+
+      // Plenty of hosts answer a missing file with a styled 404 page. That is
+      // not a robots.txt, and treating it as one would invent findings.
+      var isHtml = function (t) { return t !== null && /<html|<!doctype/i.test(t); };
+
+      var site = {
+        origin: target.origin,
+        robotsTxt: robotsBody && !isHtml(robotsBody)
+          ? pt.extractRobotsTxt(robotsBody, ['GPTBot', 'ClaudeBot', 'PerplexityBot', 'Google-Extended'])
+          : null,
+        llmsTxt: llmsBody && !isHtml(llmsBody) ? pt.extractLlmsTxt(llmsBody) : null,
+        sitemap: null
+      };
+
+      checkHtml(html, { site: site, route: target.pathname, label: target.href });
+      els.html.value = html;
+      setStatus('Checked ' + target.href + '. Edit the HTML below and the report follows along.');
+    } catch (err) {
+      setStatus(
+        'Could not fetch that page: ' + err.message + '. A browser cannot read another site directly, so this goes through a public CORS proxy that some hosts block. Paste the HTML instead — view source, copy, paste below.',
+        true
+      );
+    } finally {
+      els.go.disabled = false;
+    }
+  }
+
+  els.form.addEventListener('submit', function (e) {
+    e.preventDefault();
+    var value = els.url.value.trim();
+    if (value) checkUrl(value);
+  });
+
+  els.html.addEventListener('input', function () {
+    var html = els.html.value.trim();
+    if (!html) return;
+    try {
+      checkHtml(html, { label: 'Pasted HTML' });
+      setStatus('Checking the HTML you pasted. Nothing left this tab.');
+    } catch (err) {
+      setStatus('That HTML could not be parsed: ' + err.message, true);
+    }
+  });
+
+  els.html.value = SAMPLE;
+  checkHtml(SAMPLE, { label: 'Example page — replace it with your own' });
+  setStatus('Showing an example. Enter a URL above, or paste your own HTML.');
+})();
+</script>
+</body>
+</html>
