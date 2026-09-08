@@ -32,6 +32,11 @@ jobs:
       - run: npm ci
       - run: npm run build:site
       - uses: actions/configure-pages@v5
+        with:
+          # Creates the Pages site over the API when it does not exist yet, so
+          # a first deploy does not hinge on someone finding a dropdown in
+          # repository settings. Needs the pages: write permission above.
+          enablement: true
       - uses: actions/upload-pages-artifact@v3
         with:
           path: docs
