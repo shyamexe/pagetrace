@@ -9,6 +9,7 @@ import {
   snapshotFromDir,
   snapshotFromGitRef,
   snapshotFromOrigin,
+  snapshotFromPage,
 } from '../src/snapshot.js';
 
 const ORIGIN = 'https://example.com';
@@ -180,6 +181,58 @@ describe('broken internal links', () => {
     });
     const snapshot = await snapshotFromOrigin(ORIGIN);
     expect(snapshot.pages['/a'].brokenLinks).toBeUndefined();
+  });
+});
+
+describe('snapshotFromPage', () => {
+  const post = `<html><head><title>Post</title></head><body>
+    <a href="/live">live</a><a href="/dead">dead</a>
+    <a href="https://elsewhere.test/gone">out</a></body></html>`;
+
+  const stub = () =>
+    vi.stubGlobal('fetch', async (url: string) => {
+      const ok: Record<string, string> = {
+        [`${ORIGIN}/blog/post`]: post,
+        [`${ORIGIN}/live`]: html('Live'),
+      };
+      if (ok[url]) return new Response(ok[url], { status: 200 });
+      return new Response('nope', { status: 404 });
+    });
+
+  it('checks every link on the page, since there is no route set to trust', async () => {
+    stub();
+    const snapshot = await snapshotFromPage(`${ORIGIN}/blog/post`);
+    expect(Object.keys(snapshot.pages)).toEqual(['/blog/post']);
+    expect(snapshot.pages['/blog/post'].brokenLinks).toEqual(['/dead']);
+  });
+
+  it('leaves external links alone unless asked', async () => {
+    stub();
+    const snapshot = await snapshotFromPage(`${ORIGIN}/blog/post`);
+    expect(snapshot.pages['/blog/post'].deadExternal).toBeUndefined();
+  });
+
+  it('checks external links when asked', async () => {
+    stub();
+    const snapshot = await snapshotFromPage(`${ORIGIN}/blog/post`, { checkExternal: true });
+    expect(snapshot.pages['/blog/post'].deadExternal).toEqual(['https://elsewhere.test/gone']);
+  });
+
+  it('refuses a page that is not there rather than reporting an empty one', async () => {
+    stub();
+    await expect(snapshotFromPage(`${ORIGIN}/no-such-post`)).rejects.toThrow(/answered 404/);
+  });
+
+  it('ignores the sitemap entirely — the URL given is the one checked', async () => {
+    const asked: string[] = [];
+    vi.stubGlobal('fetch', async (url: string) => {
+      asked.push(url);
+      if (url === `${ORIGIN}/blog/post`) return new Response(html('Post'), { status: 200 });
+      return new Response('nope', { status: 404 });
+    });
+    await snapshotFromPage(`${ORIGIN}/blog/post`);
+    expect(asked.some((u) => u.includes('sitemap'))).toBe(false);
+    expect(asked.some((u) => u.includes('robots.txt'))).toBe(false);
   });
 });
 

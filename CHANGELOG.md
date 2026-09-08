@@ -6,6 +6,17 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 While the version is below 1.0.0, breaking changes ship in a minor release.
 
+## [0.13.0] - 2026-09-08
+
+### Added
+
+- `pagetrace page <url>` checks a single page: every link on it confirmed with a
+  real request, external ones included by default, plus that page's own rules.
+  A crawl trusts its route set and only verifies what is missing from it; with
+  one page there is no route set to trust, so everything is checked. Passing a
+  deep URL to `--url` had crawled the whole site from its origin and ignored the
+  path, which is not what it looked like it did.
+
 ## [0.12.0] - 2026-09-08
 
 ### Added
@@ -359,6 +370,7 @@ Initial release. `snapshot`, `check` and `audit` commands; filesystem and HTTP
 crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
+[0.13.0]: https://github.com/shyamexe/pagetrace/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/shyamexe/pagetrace/compare/v0.11.0...v0.12.0
 [0.11.0]: https://github.com/shyamexe/pagetrace/compare/v0.10.0...v0.11.0
 [0.10.0]: https://github.com/shyamexe/pagetrace/compare/v0.9.1...v0.10.0

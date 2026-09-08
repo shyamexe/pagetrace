@@ -166,6 +166,14 @@ pagetrace update              # install it globally
 | `og.removed` / `hreflang.removed` | warn | Social or i18n tags dropped |
 | `title.changed` | info | Ordinary copy edit |
 
+One page, checked on its own:
+
+```bash
+npx pagetrace page https://example.com/blog/my-post
+```
+
+No sitemap, no crawl: it fetches that URL and confirms every link on it with a real request, external links included by default (`--no-external` to skip them). Site-wide rules are left to `audit` — a single-page check never looks at robots.txt, so it does not get to say whether one exists.
+
 Broken links have a command of their own, when that is the only question you have:
 
 ```bash

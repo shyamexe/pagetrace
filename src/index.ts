@@ -34,6 +34,7 @@ export {
   snapshotFromGitRef,
   snapshotFromDir,
   snapshotFromOrigin,
+  snapshotFromPage,
 } from './snapshot.js';
 export type { AuditMeta } from './report.js';
 export type {

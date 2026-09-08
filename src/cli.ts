@@ -25,6 +25,7 @@ import {
   snapshotFromDir,
   snapshotFromGitRef,
   snapshotFromOrigin,
+  snapshotFromPage,
 } from './snapshot.js';
 import type { Config, Severity, Snapshot } from './types.js';
 import { isNewer, latestVersion } from './update.js';
@@ -249,6 +250,67 @@ cli
     if (flags.out) {
       await writeFile(flags.out, `${output}\n`, 'utf8');
       console.log(pc.green(`Wrote ${flags.out} — ${groups.length} issue types across ${pages.length} pages.`));
+    } else {
+      console.log(output);
+    }
+
+    if (failOn !== 'never' && shouldFail(findings, failOn)) {
+      process.exitCode = EXIT_FINDINGS;
+    }
+  });
+
+cli
+  .command('page <url>', 'Check one page: every link on it, and its own surface')
+  // On by default here, unlike a crawl: one page's links are a bounded cost,
+  // and "are this page's links dead" is the question being asked.
+  .option('--external', 'Check links that leave the site', { default: true })
+  .option('--concurrency <n>', 'Parallel requests', { default: 5 })
+  .option('--config <file>', 'Config file', { default: DEFAULT_CONFIG })
+  .option('--format <format>', 'pretty | json | markdown', { default: 'pretty' })
+  .option('--out <file>', 'Write the report to a file instead of stdout')
+  .option('--fail-on <severity>', 'error | warn | info | never', { default: 'error' })
+  .action(async (url: string, flags) => {
+    const failOn = parseFailOn(flags.failOn, true);
+    const config = await loadConfig(flags.config);
+    const snapshot = await snapshotFromPage(url, {
+      ...config,
+      concurrency: flags.concurrency,
+      checkExternal: flags.external,
+    });
+
+    const [page] = Object.values(snapshot.pages);
+    const platform = detectPlatform([page.generator], Object.values(page.og));
+    // Page-level findings only. A single-page check never fetches robots.txt or
+    // llms.txt, so reporting them as missing would be claiming absence from a
+    // look that was never taken. `audit` is the command that asks about a site.
+    const findings = applyConfig(auditSnapshot(snapshot, config), config)
+      .filter((f) => f.route !== null)
+      .map((f) => withGuidance(f, platform));
+
+    if (findings.length === 0 && !flags.out) {
+      const checked = (page.brokenLinks?.length ?? 0) + (page.deadExternal?.length ?? 0);
+      console.log(pc.green(`${url} looks sound — no findings, no dead links.`));
+      if (checked > 0) console.log(pc.dim('(unreachable links were treated as unknown, not dead)'));
+      return;
+    }
+
+    const groups = aggregate(findings);
+    const meta = {
+      target: url,
+      platform,
+      pageCount: 1,
+      generatedAt: new Date().toISOString().slice(0, 10),
+    };
+    const output =
+      flags.format === 'json'
+        ? JSON.stringify({ schemaVersion: 1, meta, summary: summarize(findings), groups }, null, 2)
+        : flags.format === 'markdown'
+          ? formatAuditMarkdown(groups, meta)
+          : formatAuditPretty(groups, meta, process.stdout.columns);
+
+    if (flags.out) {
+      await writeFile(flags.out, `${output}\n`, 'utf8');
+      console.log(pc.green(`Wrote ${flags.out}.`));
     } else {
       console.log(output);
     }

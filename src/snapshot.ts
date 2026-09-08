@@ -377,6 +377,56 @@ async function resolveDeadExternal(
   }
 }
 
+/**
+ * One page, checked properly. No sitemap, no route discovery: the snapshot
+ * holds a single page, so every link on it is a candidate and every candidate
+ * is confirmed with a real request. That is the opposite trade from a crawl,
+ * and the right one here — one page's worth of links is a bounded cost, and
+ * "is this page's linking sound" is a question a crawl answers slowly.
+ */
+export async function snapshotFromPage(
+  pageUrl: string,
+  options: CrawlOptions = {},
+): Promise<Snapshot> {
+  const target = new URL(pageUrl);
+  const site: SiteFingerprint = {
+    origin: options.siteUrl ? new URL(options.siteUrl).origin : target.origin,
+    robotsTxt: null,
+    llmsTxt: null,
+    sitemap: null,
+  };
+
+  const doc = await fetchDoc(target.href, options.timeout);
+  if (doc === null) throw new Error(`${target.href} answered 404 — nothing to check.`);
+
+  const route = routeFromUrl(target.href);
+  const page = extractPage(doc.text, route);
+  const landed = !doc.url
+    ? route
+    : originOf(doc.url) === target.origin
+      ? routeFromUrl(doc.url)
+      : doc.url;
+  page.redirectsTo = landed === route ? null : landed;
+
+  const pages = { [route]: page };
+  const links = { [route]: extractLinks(doc.text) };
+  const origin = site.origin ?? target.origin;
+
+  await resolveBrokenLinks(pages, links, origin, async (candidate) => {
+    try {
+      return (await fetchDoc(new URL(candidate, target.origin).href, options.timeout)) === null;
+    } catch {
+      return false;
+    }
+  });
+
+  if (options.checkExternal) {
+    await resolveDeadExternal(pages, links, origin, Math.max(1, options.concurrency ?? 5), options.timeout);
+  }
+
+  return { schemaVersion: 1, createdAt: new Date().toISOString(), site, pages };
+}
+
 export interface CrawlOptions extends Config {
   /** Cap the number of pages fetched. */
   limit?: number;
