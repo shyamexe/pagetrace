@@ -465,10 +465,10 @@ crawling; diff classified by transition; absolute, cross-page and hreflang audit
 rules; pretty, JSON, markdown, GitHub and HTML reporters.
 
 [0.14.5]: https://github.com/shyamexe/pagetrace/compare/v0.14.4...v0.14.5
-[0.14.4]: https://github.com/shyamexe/pagetrace/compare/v0.14.3...v0.14.4
-[0.14.3]: https://github.com/shyamexe/pagetrace/compare/v0.14.2...v0.14.3
-[0.14.2]: https://github.com/shyamexe/pagetrace/compare/v0.14.1...v0.14.2
-[0.14.1]: https://github.com/shyamexe/pagetrace/compare/v0.14.0...v0.14.1
+[0.14.4]: https://github.com/shyamexe/pagetrace/commit/ec2a5e2cd590
+[0.14.3]: https://github.com/shyamexe/pagetrace/commit/c45cfb49e265
+[0.14.2]: https://github.com/shyamexe/pagetrace/commit/b3aa77388ee9
+[0.14.1]: https://github.com/shyamexe/pagetrace/commit/7cc91383ed7a
 [0.14.0]: https://github.com/shyamexe/pagetrace/compare/v0.13.0...v0.14.0
 [0.13.0]: https://github.com/shyamexe/pagetrace/compare/v0.12.0...v0.13.0
 [0.12.0]: https://github.com/shyamexe/pagetrace/compare/v0.11.0...v0.12.0
